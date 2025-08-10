@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "168775587661",
+    "project_id": "instaaid-1",
+    "storage_bucket": "instaaid-1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:168775587661:android:33169edd6f936c1eda0904",
+        "android_client_info": {
+          "package_name": "com.dhruva12.driverapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "168775587661-0c96b2nj4sfhslta0beoep1lc5iptoh3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dhruva12.driverapp",
+            "certificate_hash": "8112cf2b2f1f7da4aa9fb295dd5f9e8b4a5ed7ae"
+          }
+        },
+        {
+          "client_id": "168775587661-vt8296o5mr08flqnuvi3e6j7ksgjg58p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLppyqgw9bblgeb4pB6mBTlB7PRZONESI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "168775587661-vt8296o5mr08flqnuvi3e6j7ksgjg58p.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
