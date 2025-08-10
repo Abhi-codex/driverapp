@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "scheme": "acme",
+    "web": {
+      "bundler": "metro"
+    },
+    "name": "driverapp",
+    "slug": "driverapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android"],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    },
+    "android": {
+      "package": "com.dhruva12.InstaAid",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.RECEIVE_SMS",
+        "android.permission.READ_SMS"
+      ],
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34
+    },
+    "ios": {
+      "bundleIdentifier": "com.dhruva12.InstaAid",
+      "googleServicesFile": "./GoogleService-Info.plist"
+    },
+    "plugins": [
+      "@react-native-firebase/app",
+      [
+        "@react-native-firebase/auth",
+        {
+          "android": {
+            "requestVerificationCodeAutomatically": true,
+            "forceRecaptchaFlowForTesting": false
+          }
+        }
+      ]
+    ]
+  }
+}
