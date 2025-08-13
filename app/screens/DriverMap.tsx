@@ -1,13 +1,11 @@
-import DriverDrawer from "@/components/driver/DriverDrawer";
-import DriverMap from "@/components/driver/DriverMap";
+import DriverDrawer from "../../components/driver/DriverDrawer";
+import DriverMap from "../../components/driver/DriverMap";
 import * as Location from "expo-location";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Dimensions, StatusBar, Text, View } from "react-native";
 import { runOnJS, useAnimatedGestureHandler, useSharedValue, withSpring } from "react-native-reanimated";
-import { colors, styles } from "../../constants/TailwindStyles";
+import { colors, styles } from "../../constants/tailwindStyles";
 import { useRiderLogic } from "../../hooks/useRiderLogic";
-import { useRideSearching } from "../../hooks/useRideSearching";
-import { getFallbackDistance, LatLng } from "../../utils/directions";
 
 const { height: screenHeight } = Dimensions.get("window");
 
@@ -18,19 +16,27 @@ const SNAP_POINTS = {
 };
 
 export default function DriverMapScreen() {
-  const [driverLocation, setDriverLocation] = useState<{latitude: number; longitude: number;
-    latitudeDelta: number; longitudeDelta: number; } | null>(null);
   const [loading, setLoading] = useState(true);
-
+  const [driverLocation, setDriverLocation] = useState<any>(null);
+  const [currentSnapPoint, setCurrentSnapPoint] = useState<"MINIMIZED" | "PARTIAL" | "FULL">("MINIMIZED");
+  
   const translateY = useSharedValue(SNAP_POINTS.MINIMIZED);
-  const [currentSnapPoint, setCurrentSnapPoint] = useState< "MINIMIZED" | "PARTIAL" | "FULL" >("MINIMIZED");
-  
   const autoExpandedRideId = useRef<string | null>(null);
-  
-  // Pass driverLocation to useRiderLogic for correct ride filtering
-  const { routeCoords, destination, tripStarted, online, availableRides, acceptedRide,
-    handleAcceptRide, updateRideStatus, handleRejectRide, toggleOnline } = useRiderLogic(driverLocation ? { latitude: driverLocation.latitude, longitude: driverLocation.longitude } : undefined);
 
+  const {
+    online,
+    availableRides,
+    acceptedRide,
+    tripStarted,
+    destination,
+    handleAcceptRide,
+    handleRejectRide,
+    toggleOnline,
+    updateRideStatus,
+    driverStats,
+  } = useRiderLogic();
+
+  // Auto-expand drawer when ride is accepted
   useEffect(() => {
     if (acceptedRide?._id && autoExpandedRideId.current !== acceptedRide._id) {
       translateY.value = withSpring(SNAP_POINTS.PARTIAL, {
@@ -44,8 +50,6 @@ export default function DriverMapScreen() {
       autoExpandedRideId.current = null;
     }
   }, [acceptedRide?._id]);
-
-  const { isSearching } = useRideSearching({ online, acceptedRide, availableRides });
 
   const gestureHandler = useAnimatedGestureHandler({ 
     onStart: (_, context: any) => { context.startY = translateY.value; },
@@ -104,14 +108,24 @@ export default function DriverMapScreen() {
       return;
     }
     
-      const origin: LatLng = { latitude: driverLocation.latitude, longitude: driverLocation.longitude };
-      const dest: LatLng = { latitude: destination.latitude, longitude: destination.longitude };
-      
-      const fallbackDistance = getFallbackDistance(origin, dest);
-      const fallbackDistanceKm = fallbackDistance.toFixed(2);
-      const fallbackEtaMinutes = Math.ceil(parseFloat(fallbackDistanceKm) / 0.666);
-      
-      setRouteDetails({ distanceKm: fallbackDistanceKm, etaMinutes: fallbackEtaMinutes });
+    // Simple distance calculation for fallback
+    const origin = { latitude: driverLocation.latitude, longitude: driverLocation.longitude };
+    const dest = { latitude: destination.latitude, longitude: destination.longitude };
+    
+    // Calculate distance using Haversine formula (simplified)
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (dest.latitude - origin.latitude) * Math.PI / 180;
+    const dLon = (dest.longitude - origin.longitude) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(origin.latitude * Math.PI / 180) * Math.cos(dest.latitude * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const fallbackDistance = R * c;
+    
+    const fallbackDistanceKm = fallbackDistance.toFixed(2);
+    const fallbackEtaMinutes = Math.ceil(parseFloat(fallbackDistanceKm) / 0.666);
+    
+    setRouteDetails({ distanceKm: fallbackDistanceKm, etaMinutes: fallbackEtaMinutes });
   }, 
   [ driverLocation?.latitude, driverLocation?.longitude, destination?.latitude, destination?.longitude, acceptedRide?._id ]);
   
@@ -130,40 +144,26 @@ export default function DriverMapScreen() {
       if (status !== "granted") {
         Alert.alert(
           "Location Permission Required",
-          "We need location access to help you navigate to patients and show your position on the map.",
+          "Please enable location access to use the driver map.",
           [
             { text: "Cancel", style: "cancel" },
-            { text: "Request Again", onPress: () => setLoading(false) },
+            { text: "Open Settings", onPress: () => Location.requestForegroundPermissionsAsync() },
           ]
         );
         setLoading(false);
         return;
       }
 
-      const currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      const region = {
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
-
-      setDriverLocation(region);
-      setLoading(false);
-
       const subscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          timeInterval: 5000,
+          timeInterval: 2000,
           distanceInterval: 10,
         },
-        (newLocation) => {
+        (location) => {
           const newRegion = {
-            latitude: newLocation.coords.latitude,
-            longitude: newLocation.coords.longitude,
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
           };
@@ -200,46 +200,35 @@ export default function DriverMapScreen() {
   return (
     <View style={[styles.flex1, styles.bgGray50, styles.pt8]}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent/>
+      {driverLocation && (
+        <DriverMap
+          driverLocation={driverLocation}
+          destination={destination}
+          acceptedRide={acceptedRide}
+          routeCoords={[]}
+        />
+      )}
 
-      <View style={[styles.flex1]}>
-        {driverLocation && (
-          <DriverMap
-            driverLocation={driverLocation}
-            acceptedRide={acceptedRide}
-            destination={destination}
-            routeCoords={routeCoords}
-            online={online}
-            availableRides={availableRides}
-            isSearching={isSearching}
-          />
-        )}
-      </View>
-
-      <DriverDrawer
-        translateY={translateY}
-        currentSnapPoint={currentSnapPoint}
-        gestureHandler={gestureHandler}
-        acceptedRide={acceptedRide}
-        availableRides={availableRides}
-        online={online}
-        driverLocation={driverLocation}
-        destination={destination}
-        tripStarted={tripStarted}
-        onAcceptRide={(rideId: string) => {
-          if (!driverLocation) {
-            Alert.alert('Error', 'Driver location not available. Please wait for GPS to initialize.');
-            return;
-          }
-          
-          handleAcceptRide(rideId, driverLocation);
-        }}
-        onRejectRide={handleRejectRide}
-        onToggleOnline={toggleOnline}
-        onUpdateRideStatus={updateRideStatus}
-        distanceKm={distanceKm}
-        etaMinutes={etaMinutes}
-        fare={fare}
-      />
+      {driverLocation && (
+        <DriverDrawer
+          translateY={translateY}
+          currentSnapPoint={currentSnapPoint}
+          gestureHandler={gestureHandler}
+          acceptedRide={acceptedRide}
+          availableRides={availableRides}
+          online={online}
+          driverLocation={driverLocation}
+          destination={destination}
+          tripStarted={tripStarted}
+          onAcceptRide={(rideId) => handleAcceptRide(rideId, driverLocation)}
+          onRejectRide={handleRejectRide}
+          onToggleOnline={toggleOnline}
+          onUpdateRideStatus={updateRideStatus}
+          distanceKm={distanceKm}
+          etaMinutes={etaMinutes}
+          fare={fare}
+        />
+      )}
     </View>
   );
 }

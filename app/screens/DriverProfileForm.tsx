@@ -1,46 +1,36 @@
-import LabelInput from '../../../components/LabelInput';
-import LabelSelect from '../../../components/LabelSelect';
+import DropdownField from '../../components/DropdownField';
+import InputField from '../../components/InputField';
 import { FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { colors, styles } from '../../../constants/tailwindStyles';
-import { getServerUrl } from '../../../utils/network';
+import { colors, styles } from '../../constants/tailwindStyles';
+import { getServerUrl } from '../../utils/network';
+import { DriverFormData, HospitalAffiliation } from '../../types';
 
 type VehicleType = 'bls' | 'als' | 'ccs' | 'auto' | 'bike';
 type CertificationLevel = 'EMT-Basic' | 'EMT-Intermediate' | 'EMT-Paramedic' | 'Critical Care';
 
-interface HospitalAffiliation {
-  isAffiliated: boolean;
-  hospitalName: string;
-  hospitalId: string;
-  hospitalAddress: string;
-  employeeId: string;
-  customFareFormula?: {
-    baseFare: number;
-    perKmRate: number;
-    minimumFare: number;
-  };
-}
-
-interface DriverProfile {
-  name: string;
-  email: string;
-  vehicleType: VehicleType | '';
-  plateNumber: string;
-  model: string;
-  licenseNumber: string;
-  certificationLevel: CertificationLevel | '';
-  hospitalAffiliation: HospitalAffiliation;
-}
-
-export default function DriverProfileSetupScreen() {
+export default function DriverProfileForm() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const { access_token, user: userString } = params;
+  
+  // Parse user data if it exists
+  let userData = {};
+  try {
+    if (userString && typeof userString === 'string') {
+      userData = JSON.parse(userString);
+    }
+  } catch (e) {
+    console.log('Failed to parse user data:', e);
+  }
+
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<DriverProfile>({
-    name: '',
-    email: '',
+  const [formData, setFormData] = useState<DriverFormData>({
+    name: (userData as any)?.name || '',
+    email: (userData as any)?.email || '',
     vehicleType: '',
     plateNumber: '',
     model: '',
@@ -65,23 +55,25 @@ export default function DriverProfileSetupScreen() {
     const role = await AsyncStorage.getItem('role');
     
     if (!token || role !== 'driver') {
-      router.replace('/driver/login');
+      router.replace('/screens/DriverAuth');
     }
   };
 
   const vehicleTypes = [
-    'BLS - Basic Life Support',
-    'ALS - Advanced Life Support', 
-    'CCS - Critical Care Support',
-    'Auto - Compact Urban Unit',
-    'Bike - Emergency Response Motorcycle',
+    { label: 'Select Ambulance Type', value: '' },
+    { label: 'BLS - Basic Life Support', value: 'bls' },
+    { label: 'ALS - Advanced Life Support', value: 'als' },
+    { label: 'CCS - Critical Care Support', value: 'ccs' },
+    { label: 'Auto - Compact Urban Unit', value: 'auto' },
+    { label: 'Bike - Emergency Response Motorcycle', value: 'bike' },
   ];
 
   const certificationLevels = [
-    'EMT-Basic',
-    'EMT-Intermediate', 
-    'EMT-Paramedic',
-    'Critical Care',
+    { label: 'Select Certification Level', value: '' },
+    { label: 'EMT-Basic', value: 'EMT-Basic' },
+    { label: 'EMT-Intermediate', value: 'EMT-Intermediate' },
+    { label: 'EMT-Paramedic', value: 'EMT-Paramedic' },
+    { label: 'Critical Care', value: 'Critical Care' },
   ];
 
   const validateForm = (): boolean => {
@@ -148,7 +140,7 @@ export default function DriverProfileSetupScreen() {
     return typeof plate === 'string' && plate.length >= 3 && plate.length <= 15;
   };
 
-  const handleSubmit = async () => {
+  const submitProfile = async () => {
     if (!validateForm()) {
       return;
     }
@@ -157,28 +149,19 @@ export default function DriverProfileSetupScreen() {
 
     try {
       const token = await AsyncStorage.getItem('access_token');
-      if (!token) {
+      const firebaseToken = await AsyncStorage.getItem('firebase_id_token');
+      
+      if (!token && !firebaseToken) {
         Alert.alert('Error', 'Authentication token not found. Please login again.');
-        router.replace('/driver/login');
+        router.replace('/screens/DriverAuth');
         return;
       }
-
-      const getVehicleTypeValue = (displayValue: string): string => {
-        const mapping: { [key: string]: string } = {
-          'BLS - Basic Life Support': 'bls',
-          'ALS - Advanced Life Support': 'als',
-          'CCS - Critical Care Support': 'ccs',
-          'Auto - Compact Urban Unit': 'auto',
-          'Bike - Emergency Response Motorcycle': 'bike'
-        };
-        return mapping[displayValue] || displayValue;
-      };
 
       const profileData = {
         name: formData.name.trim(),
         email: formData.email.trim() || undefined,
         vehicle: {
-          type: getVehicleTypeValue(formData.vehicleType),
+          type: formData.vehicleType,
           plateNumber: formData.plateNumber.trim().toUpperCase(),
           model: formData.model.trim(),
           licenseNumber: formData.licenseNumber.trim(),
@@ -198,6 +181,8 @@ export default function DriverProfileSetupScreen() {
           hospitalAddress: '',
           employeeId: '',
         },
+        profileCompleted: true,
+        onboardingStep: 'completed'
       };
 
       console.log('Submitting profile data:', profileData);
@@ -206,7 +191,7 @@ export default function DriverProfileSetupScreen() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${firebaseToken || token}`,
         },
         body: JSON.stringify(profileData),
       });
@@ -223,14 +208,15 @@ export default function DriverProfileSetupScreen() {
       console.log('Profile update response:', data);
 
       if (response.ok) {
-        await AsyncStorage.setItem("profile_complete", "true");
+        await AsyncStorage.setItem("profile_completed", "1");
+        await AsyncStorage.setItem('driver_profile', JSON.stringify(formData));
         Alert.alert(
           'Success!',
           'Your driver profile has been completed successfully. You can now start accepting emergency calls.',
           [
             {
               text: 'Go to Dashboard',
-              onPress: () => router.replace('/driver/dashboard'),
+              onPress: () => router.replace('/screens/DriverDashboard'),
             },
           ]
         );
@@ -245,7 +231,7 @@ export default function DriverProfileSetupScreen() {
     }
   };
 
-  const updateFormData = (field: keyof DriverProfile, value: string) => {
+  const updateFormData = (field: keyof DriverFormData, value: string) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,
@@ -288,8 +274,9 @@ export default function DriverProfileSetupScreen() {
             <Text style={[styles.textLg, styles.fontBold, styles.textGray900, styles.mb3]}>Personal Information</Text>
 
             {/* Name Input */}
-            <LabelInput
-              label="Full Name *"
+            <InputField
+              label="Full Name"
+              required
               placeholder="Enter your full name"
               value={formData.name}
               onChangeText={(value) => updateFormData('name', value)}
@@ -297,7 +284,7 @@ export default function DriverProfileSetupScreen() {
             />
 
             {/* Email Input */}
-            <LabelInput
+            <InputField
               label="Email Address (Optional)"
               placeholder="Enter your email address"
               value={formData.email}
@@ -313,16 +300,19 @@ export default function DriverProfileSetupScreen() {
             <Text style={[styles.textLg, styles.fontBold, styles.textGray900, styles.mb3]}>Ambulance Information</Text>
 
             {/* Vehicle Type Picker */}
-            <LabelSelect
-              label="Ambulance Type *"
+            <DropdownField
+              label="Ambulance Type"
+              required
               value={formData.vehicleType}
-              onChange={(value) => updateFormData('vehicleType', value as string)}
+              onValueChange={(value) => updateFormData('vehicleType', value)}
               options={vehicleTypes}
+              enabled={!loading}
             />
 
             {/* Plate Number Input */}
-            <LabelInput
-              label="License Plate Number *"
+            <InputField
+              label="License Plate Number"
+              required
               placeholder="e.g., AMB1234"
               value={formData.plateNumber}
               onChangeText={(value) => updateFormData('plateNumber', value)}
@@ -331,8 +321,9 @@ export default function DriverProfileSetupScreen() {
             />
 
             {/* Vehicle Model Input */}
-            <LabelInput
-              label="Vehicle Model *"
+            <InputField
+              label="Vehicle Model"
+              required
               placeholder="e.g., Mercedes Sprinter"
               value={formData.model}
               onChangeText={(value) => updateFormData('model', value)}
@@ -345,8 +336,9 @@ export default function DriverProfileSetupScreen() {
             <Text style={[styles.textLg, styles.fontBold, styles.textGray900, styles.mb3]}>EMT Certification</Text>
 
             {/* License Number Input */}
-            <LabelInput
-              label="EMT License Number *"
+            <InputField
+              label="EMT License Number"
+              required
               placeholder="Enter your EMT license number"
               value={formData.licenseNumber}
               onChangeText={(value) => updateFormData('licenseNumber', value)}
@@ -354,11 +346,13 @@ export default function DriverProfileSetupScreen() {
             />
 
             {/* Certification Level Picker */}
-            <LabelSelect
-              label="Certification Level *"
+            <DropdownField
+              label="Certification Level"
+              required
               value={formData.certificationLevel}
-              onChange={(value) => updateFormData('certificationLevel', value as string)}
+              onValueChange={(value) => updateFormData('certificationLevel', value)}
               options={certificationLevels}
+              enabled={!loading}
             />
           </View>
 
@@ -401,23 +395,25 @@ export default function DriverProfileSetupScreen() {
             {/* Hospital Details (only if affiliated) */}
             {formData.hospitalAffiliation.isAffiliated && (
               <>
-                <LabelInput
-                  label="Hospital Name *"
+                <InputField
+                  label="Hospital Name"
+                  required
                   placeholder="e.g., City General Hospital"
                   value={formData.hospitalAffiliation.hospitalName}
                   onChangeText={(value) => updateHospitalAffiliation({ hospitalName: value })}
                   editable={!loading}
                 />
 
-                <LabelInput
-                  label="Hospital ID *"
+                <InputField
+                  label="Hospital ID"
+                  required
                   placeholder="e.g., CGH001"
                   value={formData.hospitalAffiliation.hospitalId}
                   onChangeText={(value) => updateHospitalAffiliation({ hospitalId: value })}
                   editable={!loading}
                 />
 
-                <LabelInput
+                <InputField
                   label="Hospital Address"
                   placeholder="Hospital address"
                   value={formData.hospitalAffiliation.hospitalAddress}
@@ -427,8 +423,9 @@ export default function DriverProfileSetupScreen() {
                   numberOfLines={2}
                 />
 
-                <LabelInput
-                  label="Employee ID *"
+                <InputField
+                  label="Employee ID"
+                  required
                   placeholder="e.g., EMP789"
                   value={formData.hospitalAffiliation.employeeId}
                   onChangeText={(value) => updateHospitalAffiliation({ employeeId: value })}
@@ -445,7 +442,7 @@ export default function DriverProfileSetupScreen() {
           {/* Submit Button */}
           <TouchableOpacity
             style={[styles.wFull, styles.py4, styles.alignCenter, styles.roundedLg, styles.mb4, styles.bgBlack]}
-            onPress={handleSubmit}
+            onPress={submitProfile}
             disabled={loading}
           >
             {loading ? (

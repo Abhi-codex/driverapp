@@ -3,11 +3,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
-import LabelInput from "../../components/Input";
-import { colors, styles } from "../../constants/TailwindStyles";
-import { getServerUrl } from "../../utils/network";
+import { colors, styles } from "../../constants/tailwindStyles";
+import LabelInput from "../../components/LabelInput";
+import { FirebasePhoneAuth } from "../../utils/firebase";
 
-export default function DriverLoginScreen() {
+export default function DriverAuthScreen() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,7 +22,7 @@ export default function DriverLoginScreen() {
     return phoneNumber.length === 10 && /^\d{10}$/.test(phoneNumber);
   };
 
-  const handleDriverLogin = async () => {
+  const handleAuth = async () => {
     if (!phoneNumber.trim()) {
       Alert.alert("Error", "Please enter your phone number");
       return;
@@ -36,64 +36,32 @@ export default function DriverLoginScreen() {
     setLoading(true);
 
     try {
-      const formattedPhone = "+91" + phoneNumber;
-
-      const response = await fetch(`${getServerUrl()}/auth/signin`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone: formattedPhone,
-          role: "driver",
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        await AsyncStorage.setItem("access_token", data.access_token);
-        await AsyncStorage.setItem("refresh_token", data.refresh_token);
-        await AsyncStorage.setItem("role", "driver");
-        await AsyncStorage.setItem("user_id", data.user._id);
-
-        const isProfileComplete = data.user.name && 
-                                 data.user.vehicle && 
-                                 data.user.vehicle.type && 
-                                 data.user.vehicle.plateNumber && 
-                                 data.user.vehicle.licenseNumber;
-
-        if (isProfileComplete) {
-          await AsyncStorage.setItem("profile_complete", "true");
-          Alert.alert("Success", "Login successful!", [
-            {
-              text: "Continue",
-              onPress: () => router.replace("/driver/dashboard"),
-            },
-          ]);
-        } else {
-          await AsyncStorage.removeItem("profile_complete");
-          Alert.alert(
-            "Welcome!",
-            data.message === "User created successfully"
-              ? "Please complete your driver profile to start accepting rides."
-              : "Please complete your profile information to continue.",
-            [
-              {
-                text: "Complete Profile",
-                onPress: () => router.replace("/driver/profile" as any),
-              },
-            ]
-          );
-        }
+      const formattedPhone = FirebasePhoneAuth.formatPhoneNumber(phoneNumber, '+91');
+      console.log('[DRIVER AUTH] Sending OTP to:', formattedPhone);
+      
+      // Send OTP via Firebase (this works for both new and existing users)
+      const result = await FirebasePhoneAuth.sendOTP(formattedPhone);
+      
+      if (result.success && result.verificationId) {
+        console.log('[DRIVER AUTH] OTP sent successfully');
+        router.push({
+          pathname: '/screens/OtpScreen',
+          params: {
+            phone: formattedPhone,
+            isFirebaseAuth: 'true',
+            verificationId: result.verificationId,
+            isSignup: 'auto', // Auto-detect if user is new or existing
+            role: 'driver'
+          }
+        });
       } else {
         Alert.alert(
-          "Login Failed",
-          data.message || "Unable to login. Please try again."
+          "Error",
+          result.message || "Failed to send OTP. Please try again."
         );
       }
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("Driver auth error:", error);
       Alert.alert(
         "Error",
         "Network error. Please check your connection and try again."
@@ -104,7 +72,10 @@ export default function DriverLoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={[styles.flex1]} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <KeyboardAvoidingView 
+      style={[styles.flex1]} 
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <ScrollView
         style={[styles.flex1, { backgroundColor: colors.gray[50] }]}
         contentContainerStyle={[styles.flexGrow, styles.justifyCenter]}
@@ -113,14 +84,14 @@ export default function DriverLoginScreen() {
         <View style={[styles.px5, styles.py6]}>
           {/* Header */}
           <View style={[styles.alignCenter, styles.mb6]}>
-            <View style={{ alignItems: "center", justifyContent: "center", marginBottom: 20,}}>
-                <FontAwesome5 name="user-md" size={64} color={styles.textGray900.color || "#111"} />
+            <View style={{ alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+              <FontAwesome5 name="user-md" size={64} color={styles.textGray900.color || "#111"} />
             </View>
             <Text style={[styles.text3xl, styles.fontBold, styles.textGray900, styles.textCenter]}>
-              Driver Portal
+              Driver Authentication
             </Text>
             <Text style={[styles.textBase, styles.textGray600, styles.textCenter, styles.mt2]}>
-              Login to start accepting emergency calls
+              Enter your phone number to continue
             </Text>
           </View>
 
@@ -136,7 +107,7 @@ export default function DriverLoginScreen() {
               editable={!loading}
               helperText={phoneNumber.length > 0 && phoneNumber.length < 10 ? 
                 `Enter ${10 - phoneNumber.length} more digits` : 
-                phoneNumber.length === 10 ? "✓ Valid mobile number" : 
+                phoneNumber.length === 10 ? "Valid mobile number" : 
                 "Enter 10-digit mobile number"
               }
               containerStyle={styles.mb4}
@@ -149,14 +120,14 @@ export default function DriverLoginScreen() {
                   {backgroundColor: loading || !validatePhone() ? colors.gray[300] : colors.primary[500],
                    shadowColor: colors.black, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1,
                    shadowRadius: 4, elevation: 3}]}
-            onPress={handleDriverLogin}
+            onPress={handleAuth}
             disabled={loading || !validatePhone()}
           >
             {loading ? (
               <ActivityIndicator color={colors.white} size="small" />
             ) : (
               <Text style={[styles.textWhite, styles.textLg, styles.fontBold]}>
-                Continue as Driver
+                Continue with Phone
               </Text>
             )}
           </TouchableOpacity>
@@ -178,19 +149,6 @@ export default function DriverLoginScreen() {
               4. Background verification completed
             </Text>
           </View>
-
-          <TouchableOpacity
-            style={[styles.alignCenter, styles.mt6]}
-            onPress={() => router.replace("/patient/login")}
-            disabled={loading}
-          >
-            <Text style={[styles.textSm, styles.textGray600]}>
-              Not a driver?{" "}
-              <Text style={[styles.textPrimary500, styles.fontMedium]}>
-                Book an Ambulance
-              </Text>
-            </Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
