@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Platform, Text, View, TouchableOpacity, StatusBar } from 'react-native';
-import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons, FontAwesome5, Fontisto } from '@expo/vector-icons';
 import { colors, styles } from '../constants/tailwindStyles';
+import { mapStyles } from '../constants/mapStyles';
+import { mapControlThemes, mapTypeOptions } from '../constants/mapThemes';
 
 let MapView: any;
 let Marker: any;
@@ -26,126 +28,6 @@ if (Platform.OS !== 'web') {
     console.log('react-native-maps not available:', error);
   }
 }
-
-// Simplified map type options (removed satellite, kept professional icons)
-export const mapTypeOptions = [
-  { key: 'standard', label: 'Standard', iconType: 'MaterialIcons', iconName: 'map' },
-  { key: 'hybrid', label: 'Hybrid', iconType: 'MaterialIcons', iconName: 'satellite' },
-  { key: 'terrain', label: 'Terrain', iconType: 'FontAwesome5', iconName: 'mountain' },
-];
-
-// Enhanced map style configurations for different themes (lighter night theme)
-export const mapStyles = {
-  day: [
-    {
-      featureType: 'all',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#333333' }]
-    },
-    {
-      featureType: 'road',
-      elementType: 'geometry',
-      stylers: [{ color: '#ffffff' }]
-    },
-    {
-      featureType: 'water',
-      elementType: 'geometry',
-      stylers: [{ color: '#4285f4' }]
-    }
-  ],
-  night: [
-    {
-      featureType: 'all',
-      elementType: 'geometry',
-      stylers: [{ color: '#4a5568' }] // Lighter gray instead of very dark
-    },
-    {
-      featureType: 'all',
-      elementType: 'labels.text.stroke',
-      stylers: [{ color: '#2d3748' }] // Medium gray
-    },
-    {
-      featureType: 'all',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#e2e8f0' }] // Light gray text
-    },
-    {
-      featureType: 'administrative.locality',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#f7fafc' }] // Very light text
-    },
-    {
-      featureType: 'poi',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#cbd5e0' }]
-    },
-    {
-      featureType: 'poi.park',
-      elementType: 'geometry',
-      stylers: [{ color: '#2f855a' }] // Lighter green
-    },
-    {
-      featureType: 'poi.park',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#9ae6b4' }]
-    },
-    {
-      featureType: 'road',
-      elementType: 'geometry',
-      stylers: [{ color: '#718096' }] // Lighter road color
-    },
-    {
-      featureType: 'road',
-      elementType: 'geometry.stroke',
-      stylers: [{ color: '#4a5568' }]
-    },
-    {
-      featureType: 'road',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#e2e8f0' }]
-    },
-    {
-      featureType: 'road.highway',
-      elementType: 'geometry',
-      stylers: [{ color: '#a0aec0' }] // Much lighter highway
-    },
-    {
-      featureType: 'road.highway',
-      elementType: 'geometry.stroke',
-      stylers: [{ color: '#718096' }]
-    },
-    {
-      featureType: 'road.highway',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#f7fafc' }]
-    },
-    {
-      featureType: 'transit',
-      elementType: 'geometry',
-      stylers: [{ color: '#4a5568' }]
-    },
-    {
-      featureType: 'transit.station',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#cbd5e0' }]
-    },
-    {
-      featureType: 'water',
-      elementType: 'geometry',
-      stylers: [{ color: '#2b6cb0' }] // Lighter blue water
-    },
-    {
-      featureType: 'water',
-      elementType: 'labels.text.fill',
-      stylers: [{ color: '#bee3f8' }]
-    },
-    {
-      featureType: 'water',
-      elementType: 'labels.text.stroke',
-      stylers: [{ color: '#2b6cb0' }]
-    }
-  ],
-};
 
 interface MapViewWrapperProps {
   style?: any;
@@ -288,174 +170,197 @@ const MapControls: React.FC<MapControlsProps> = ({
   onThemeChange,
   isVisible,
   onToggle,
-}) => (
-  <View style={[styles.absolute, { top: 16, right: 16, zIndex: 50 }]}>
-    {/* Toggle Button */}
-    <TouchableOpacity
-      onPress={onToggle}
-      style={[
-        styles.bgWhite, styles.roundedFull, styles.shadowLg, styles.p3, styles.mb2,
-        { elevation: 5 }
-      ]}
-    >
-      <MaterialIcons 
-        name={isVisible ? "close" : "settings"} 
-        size={24} 
-        color={colors.primary[600]} 
-      />
-    </TouchableOpacity>
+}) => {
+  // Get current theme colors
+  const currentTheme = theme === 'night' ? mapControlThemes.dark : mapControlThemes.light;
+  
+  return (
+    <View style={[styles.absolute, { top: 16, right: 16, zIndex: 50 }]}>
+      {/* Toggle Button */}
+      <TouchableOpacity
+        onPress={onToggle}
+        style={[
+          styles.roundedFull, styles.shadowSm, styles.p2, styles.mb2,
+          { backgroundColor: currentTheme.toggleButton, elevation: 5, borderWidth: 1, borderColor: currentTheme.border }
+        ]}
+      >
+        <Fontisto 
+          name={isVisible ? "close" : "player-settings"} 
+          size={24} 
+          color={currentTheme.textSecondary} 
+        />
+      </TouchableOpacity>
 
-    {/* Controls Panel - Only show when visible */}
-    {isVisible && (
-      <>
-        {/* Map Type Selector */}
-        <View style={[styles.bgWhite, styles.roundedLg, styles.shadowLg, styles.p3, styles.mb2]}>
-          <Text style={[styles.textSm, styles.fontBold, styles.textGray700, styles.mb3, styles.textCenter]}>
-            Map Type
-          </Text>
-          <View style={[styles.flexRow, styles.justifyCenter]}>
-            {mapTypeOptions.map((option) => (
-              <TouchableOpacity
-                key={option.key}
-                onPress={() => onMapTypeChange(option.key)}
-                style={[
-                  styles.p2, styles.mx1, styles.roundedMd, { minWidth: 50 },
-                  currentMapType === option.key 
-                    ? { backgroundColor: colors.primary[500] }
-                    : { backgroundColor: colors.gray[100] }
-                ]}
-              >
-                <View style={[styles.alignCenter]}>
-                  {renderIcon(
-                    option.iconType, 
-                    option.iconName, 
-                    20,
-                    currentMapType === option.key ? colors.white : colors.gray[700]
-                  )}
-                  <Text style={[
-                    styles.textXs, styles.textCenter, styles.mt1,
-                    currentMapType === option.key ? styles.textWhite : styles.textGray700
-                  ]}>
-                    {option.label}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+      {/* Controls Panel - Only show when visible */}
+      {isVisible && (
+        <>
+          {/* Map Type Selector */}
+          <View style={[
+            styles.roundedLg, styles.shadowLg, styles.p3, styles.mb2,
+            { backgroundColor: currentTheme.panelBackground, borderWidth: 1, borderColor: currentTheme.border }
+          ]}>
+            <Text style={[
+              styles.textSm, styles.fontBold, styles.mb3, styles.textCenter,
+              { color: currentTheme.textPrimary }
+            ]}>
+              Map Type
+            </Text>
+            <View style={[styles.flexRow, styles.justifyCenter]}>
+              {mapTypeOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.key}
+                  onPress={() => onMapTypeChange(option.key)}
+                  style={[
+                    styles.p2, styles.mx1, styles.roundedMd, { minWidth: 50 },
+                    currentMapType === option.key 
+                      ? { backgroundColor: currentTheme.buttonActive }
+                      : { backgroundColor: currentTheme.buttonInactive }
+                  ]}
+                >
+                  <View style={[styles.alignCenter]}>
+                    {renderIcon(
+                      option.iconType, 
+                      option.iconName, 
+                      20,
+                      currentMapType === option.key ? currentTheme.buttonActiveText : currentTheme.buttonInactiveText
+                    )}
+                    <Text style={[
+                      styles.textXs, styles.textCenter, styles.mt1,
+                      { color: currentMapType === option.key ? currentTheme.buttonActiveText : currentTheme.buttonInactiveText }
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
 
-        {/* Theme Selector */}
-        <View style={[styles.bgWhite, styles.roundedLg, styles.shadowLg, styles.p3, styles.mb2]}>
-          <Text style={[styles.textSm, styles.fontBold, styles.textGray700, styles.mb3, styles.textCenter]}>
-            Theme
-          </Text>
-          <View style={[styles.flexRow, styles.justifyCenter]}>
-            {[
-              { key: 'day', iconType: 'Ionicons', iconName: 'sunny', label: 'Day' },
-              { key: 'night', iconType: 'Ionicons', iconName: 'moon', label: 'Night' }
-            ].map((option) => (
-              <TouchableOpacity
-                key={option.key}
-                onPress={() => onThemeChange(option.key)}
-                style={[
-                  styles.p2, styles.mx1, styles.roundedMd, { minWidth: 60 },
-                  theme === option.key 
-                    ? { backgroundColor: colors.primary[500] }
-                    : { backgroundColor: colors.gray[100] }
-                ]}
-              >
-                <View style={[styles.alignCenter]}>
-                  {renderIcon(
-                    option.iconType, 
-                    option.iconName, 
-                    20,
-                    theme === option.key ? colors.white : colors.gray[700]
-                  )}
-                  <Text style={[
-                    styles.textXs, styles.textCenter, styles.mt1,
-                    theme === option.key ? styles.textWhite : styles.textGray700
-                  ]}>
-                    {option.label}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+          {/* Theme Selector */}
+          <View style={[
+            styles.roundedLg, styles.shadowLg, styles.p3, styles.mb2,
+            { backgroundColor: currentTheme.panelBackground, borderWidth: 1, borderColor: currentTheme.border }
+          ]}>
+            <Text style={[
+              styles.textSm, styles.fontBold, styles.mb3, styles.textCenter,
+              { color: currentTheme.textPrimary }
+            ]}>
+              Theme
+            </Text>
+            <View style={[styles.flexRow, styles.justifyCenter]}>
+              {[
+                { key: 'day', iconType: 'Ionicons', iconName: 'sunny', label: 'Day' },
+                { key: 'night', iconType: 'Ionicons', iconName: 'moon', label: 'Night' }
+              ].map((option) => (
+                <TouchableOpacity
+                  key={option.key}
+                  onPress={() => onThemeChange(option.key)}
+                  style={[
+                    styles.p2, styles.mx1, styles.roundedMd, { minWidth: 60 },
+                    theme === option.key 
+                      ? { backgroundColor: currentTheme.buttonActive }
+                      : { backgroundColor: currentTheme.buttonInactive }
+                  ]}
+                >
+                  <View style={[styles.alignCenter]}>
+                    {renderIcon(
+                      option.iconType, 
+                      option.iconName, 
+                      20,
+                      theme === option.key ? currentTheme.buttonActiveText : currentTheme.buttonInactiveText
+                    )}
+                    <Text style={[
+                      styles.textXs, styles.textCenter, styles.mt1,
+                      { color: theme === option.key ? currentTheme.buttonActiveText : currentTheme.buttonInactiveText }
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
 
-        {/* Feature Controls */}
-        <View style={[styles.bgWhite, styles.roundedLg, styles.shadowLg, styles.p3]}>
-          <Text style={[styles.textSm, styles.fontBold, styles.textGray700, styles.mb3, styles.textCenter]}>
-            Features
-          </Text>
-          
-          <TouchableOpacity
-            onPress={onTrafficToggle}
-            style={[
-              styles.flexRow, styles.alignCenter, styles.p2, styles.roundedMd, styles.mb2,
-              showsTraffic ? { backgroundColor: colors.medical[100] } : { backgroundColor: colors.gray[50] }
-            ]}
-          >
-            <MaterialIcons 
-              name="traffic" 
-              size={18} 
-              color={showsTraffic ? colors.medical[600] : colors.gray[500]} 
-              style={styles.mr2}
-            />
+          {/* Feature Controls */}
+          <View style={[
+            styles.roundedLg, styles.shadowLg, styles.p3,
+            { backgroundColor: currentTheme.panelBackground, borderWidth: 1, borderColor: currentTheme.border }
+          ]}>
             <Text style={[
-              styles.textSm, styles.fontMedium,
-              showsTraffic ? { color: colors.medical[700] } : styles.textGray600
+              styles.textSm, styles.fontBold, styles.mb3, styles.textCenter,
+              { color: currentTheme.textPrimary }
             ]}>
-              Traffic
+              Features
             </Text>
-          </TouchableOpacity>
+            
+            <TouchableOpacity
+              onPress={onTrafficToggle}
+              style={[
+                styles.flexRow, styles.alignCenter, styles.p2, styles.roundedMd, styles.mb2,
+                { backgroundColor: showsTraffic ? currentTheme.featureActive : currentTheme.featureInactive }
+              ]}
+            >
+              <MaterialIcons 
+                name="traffic" 
+                size={18} 
+                color={showsTraffic ? currentTheme.featureActiveIcon : currentTheme.featureInactiveIcon} 
+                style={styles.mr2}
+              />
+              <Text style={[
+                styles.textSm, styles.fontMedium,
+                { color: showsTraffic ? currentTheme.featureActiveText : currentTheme.featureInactiveText }
+              ]}>
+                Traffic
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={onBuildingsToggle}
-            style={[
-              styles.flexRow, styles.alignCenter, styles.p2, styles.roundedMd, styles.mb2,
-              showsBuildings ? { backgroundColor: colors.primary[100] } : { backgroundColor: colors.gray[50] }
-            ]}
-          >
-            <MaterialIcons 
-              name="location-city" 
-              size={18} 
-              color={showsBuildings ? colors.primary[600] : colors.gray[500]} 
-              style={styles.mr2}
-            />
-            <Text style={[
-              styles.textSm, styles.fontMedium,
-              showsBuildings ? { color: colors.primary[700] } : styles.textGray600
-            ]}>
-              Buildings
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onBuildingsToggle}
+              style={[
+                styles.flexRow, styles.alignCenter, styles.p2, styles.roundedMd, styles.mb2,
+                { backgroundColor: showsBuildings ? currentTheme.featureActive : currentTheme.featureInactive }
+              ]}
+            >
+              <MaterialIcons 
+                name="location-city" 
+                size={18} 
+                color={showsBuildings ? currentTheme.featureActiveIcon : currentTheme.featureInactiveIcon} 
+                style={styles.mr2}
+              />
+              <Text style={[
+                styles.textSm, styles.fontMedium,
+                { color: showsBuildings ? currentTheme.featureActiveText : currentTheme.featureInactiveText }
+              ]}>
+                Buildings
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={onPOIToggle}
-            style={[
-              styles.flexRow, styles.alignCenter, styles.p2, styles.roundedMd,
-              showsPointsOfInterest ? { backgroundColor: colors.secondary[100] } : { backgroundColor: colors.gray[50] }
-            ]}
-          >
-            <MaterialIcons 
-              name="place" 
-              size={18} 
-              color={showsPointsOfInterest ? colors.secondary[600] : colors.gray[500]} 
-              style={styles.mr2}
-            />
-            <Text style={[
-              styles.textSm, styles.fontMedium,
-              showsPointsOfInterest ? { color: colors.secondary[700] } : styles.textGray600
-            ]}>
-              Points of Interest
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </>
-    )}
-  </View>
-);
+            <TouchableOpacity
+              onPress={onPOIToggle}
+              style={[
+                styles.flexRow, styles.alignCenter, styles.p2, styles.roundedMd,
+                { backgroundColor: showsPointsOfInterest ? currentTheme.featureActive : currentTheme.featureInactive }
+              ]}
+            >
+              <MaterialIcons 
+                name="place" 
+                size={18} 
+                color={showsPointsOfInterest ? currentTheme.featureActiveIcon : currentTheme.featureInactiveIcon} 
+                style={styles.mr2}
+              />
+              <Text style={[
+                styles.textSm, styles.fontMedium,
+                { color: showsPointsOfInterest ? currentTheme.featureActiveText : currentTheme.featureInactiveText }
+              ]}>
+                Points of Interest
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+    </View>
+  );
+};
 
 export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
   // State for enhanced map features
@@ -558,7 +463,7 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
 
       {/* Enhanced Status Bar for dark themes */}
       {theme === 'night' && (
-        <StatusBar barStyle="light-content" backgroundColor="#4a5568" />
+        <StatusBar barStyle="light-content" backgroundColor="#09090aff" />
       )}
     </View>
   );

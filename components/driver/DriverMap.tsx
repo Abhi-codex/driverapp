@@ -125,12 +125,6 @@ function DriverMap({
     );
   }
 
-  // Debug logs (removed duplicates to prevent re-render loops)
-  // console.log('🗺️ DriverMap - Rendering map with location:', stableDriverLocation);
-  // console.log('🗺️ DriverMap - Map region:', mapRegion);
-  // console.log('🗺️ DriverMap - Available rides:', stableAvailableRides.length);
-
-  // Show fallback if map loading failed
   if (showFallback) {
     return (
       <View style={[styles.flex1, styles.alignCenter, styles.justifyCenter, styles.bgGray100]}>
