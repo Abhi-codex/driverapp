@@ -38,20 +38,34 @@ export default function DriverProfile() {
 
   const tryRefreshToken = async () => {
     try {
-      const firebaseToken = await AsyncStorage.getItem('firebase_id_token');
-      if (firebaseToken) {
-        console.log('[PROFILE] Attempting to refresh access token...');
-        const { FirebasePhoneAuth } = await import('../../utils/firebase');
-        const authResult = await FirebasePhoneAuth.authenticateWithBackend(firebaseToken, 'driver');
+      // First try to get a fresh Firebase ID token
+      const { FirebasePhoneAuth } = await import('../../utils/firebase');
+      const freshToken = await FirebasePhoneAuth.getFreshIdToken();
+      
+      if (freshToken) {
+        console.log('[PROFILE] Got fresh Firebase ID token, authenticating with backend...');
+        const authResult = await FirebasePhoneAuth.authenticateWithBackend(freshToken, 'driver');
         if (authResult.success && authResult.access_token) {
           await AsyncStorage.setItem('access_token', authResult.access_token);
+          await AsyncStorage.setItem('firebase_id_token', freshToken);
           console.log('[PROFILE] Access token refreshed successfully');
           return authResult.access_token;
         } else {
           console.log('[PROFILE] Token refresh failed - no access token in response');
         }
       } else {
-        console.log('[PROFILE] No Firebase ID token found for refresh');
+        // Fallback: try with stored Firebase token
+        const firebaseToken = await AsyncStorage.getItem('firebase_id_token');
+        if (firebaseToken) {
+          console.log('[PROFILE] Using stored Firebase token for refresh...');
+          const authResult = await FirebasePhoneAuth.authenticateWithBackend(firebaseToken, 'driver');
+          if (authResult.success && authResult.access_token) {
+            await AsyncStorage.setItem('access_token', authResult.access_token);
+            console.log('[PROFILE] Access token refreshed with stored token');
+            return authResult.access_token;
+          }
+        }
+        console.log('[PROFILE] No valid Firebase ID token found for refresh');
       }
     } catch (error) {
       console.error('[PROFILE] Token refresh failed:', error);

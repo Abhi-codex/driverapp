@@ -148,13 +148,26 @@ export default function DriverProfileForm() {
     setLoading(true);
 
     try {
-      const token = await AsyncStorage.getItem('access_token');
-      const firebaseToken = await AsyncStorage.getItem('firebase_id_token');
+      let token = await AsyncStorage.getItem('access_token');
+      let firebaseToken = await AsyncStorage.getItem('firebase_id_token');
       
       if (!token && !firebaseToken) {
         Alert.alert('Error', 'Authentication token not found. Please login again.');
         router.replace('/screens/DriverAuth');
         return;
+      }
+
+      // Try to get a fresh Firebase token to avoid expiration issues
+      try {
+        const { FirebasePhoneAuth } = await import('../../utils/firebase');
+        const freshToken = await FirebasePhoneAuth.getFreshIdToken();
+        if (freshToken) {
+          firebaseToken = freshToken;
+          await AsyncStorage.setItem('firebase_id_token', freshToken);
+          console.log('[PROFILE FORM] Using fresh Firebase token');
+        }
+      } catch (tokenError) {
+        console.warn('[PROFILE FORM] Could not get fresh token:', tokenError);
       }
 
       const profileData = {
@@ -187,7 +200,8 @@ export default function DriverProfileForm() {
 
       console.log('Submitting profile data:', profileData);
 
-      const response = await fetch(`${getServerUrl()}/driver/profile`, {
+      // Try with Firebase token first, then access token as fallback
+      let response = await fetch(`${getServerUrl()}/driver/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -195,6 +209,19 @@ export default function DriverProfileForm() {
         },
         body: JSON.stringify(profileData),
       });
+
+      // If 401/500 with Firebase token, try with access token
+      if ((response.status === 401 || response.status === 500) && firebaseToken && token && firebaseToken !== token) {
+        console.log('[PROFILE FORM] Firebase token failed, trying access token...');
+        response = await fetch(`${getServerUrl()}/driver/profile`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(profileData),
+        });
+      }
 
       let data;
       let isJson = false;
@@ -205,21 +232,38 @@ export default function DriverProfileForm() {
         data = null;
         isJson = false;
       }
-      console.log('Profile update response:', data);
+      console.log('Profile update response:', { status: response.status, data });
 
       if (response.ok) {
-        await AsyncStorage.setItem("profile_completed", "1");
+        console.log('[PROFILE FORM] Profile update successful, updating storage...');
+        
+        // Update storage with proper values
+        await AsyncStorage.setItem("profile_complete", "true");
         await AsyncStorage.setItem('driver_profile', JSON.stringify(formData));
-        Alert.alert(
-          'Success!',
-          'Your driver profile has been completed successfully. You can now start accepting emergency calls.',
-          [
-            {
-              text: 'Go to Dashboard',
-              onPress: () => router.replace('/screens/DriverDashboard'),
-            },
-          ]
-        );
+        
+        // Also ensure profile completion is properly flagged in multiple ways
+        await AsyncStorage.setItem("profile_completed", "1");
+        await AsyncStorage.setItem("onboarding_complete", "true");
+        
+        console.log('[PROFILE FORM] Storage updated successfully');
+        
+        // Small delay to ensure storage is written
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        console.log('[PROFILE FORM] Navigating to MainTabs...');
+        
+        // Use push first, then replace to ensure navigation works
+        router.push('/navigation/MainTabs');
+        
+        // Show success message
+        setTimeout(() => {
+          Alert.alert(
+            'Success!',
+            'Your driver profile has been completed successfully. You can now start accepting emergency calls.',
+            [{ text: 'OK' }]
+          );
+        }, 1000);
+        
       } else {
         Alert.alert('Error', isJson && data && data.message ? data.message : 'Failed to update profile. Please try again.');
       }

@@ -3,9 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Image } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { StackNavigationProp } from "@react-navigation/stack";
 import { styles as s } from "../../constants/tailwindStyles";
-import { FirebasePhoneAuth } from "../../utils/firebase";
-import { getServerUrl } from "../../utils/network";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { verifyOtpFlow, resendOtpHelper } from "../../utils/otpManager";
 import { useRouter, useLocalSearchParams } from "expo-router";
 
 const DEBUG = __DEV__ === true;
@@ -19,16 +17,14 @@ const OtpScreen: React.FC = () => {
   const { 
     phone, 
     isFirebaseAuth = 'false', 
-    verificationId, 
-    isSignup = 'false',
-    role = 'driver'
+    verificationId 
   } = params as {
     phone: string;
     isFirebaseAuth?: string;
     verificationId?: string;
-    isSignup?: string;
-    role?: 'driver' | 'doctor' | 'patient';
   };
+
+  const isFirebaseAuthEnabled = isFirebaseAuth === 'true';
 
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
@@ -41,18 +37,12 @@ const OtpScreen: React.FC = () => {
   const [lastAttemptedCode, setLastAttemptedCode] = useState<string>("");
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
-  const isFirebaseAuthEnabled = isFirebaseAuth === 'true';
-  const isSignupFlow = isSignup === 'true';
-
   useEffect(() => {
     if (DEBUG) {
       console.log("[OTP SCREEN] Received params:", {
         phone,
         isFirebaseAuth: isFirebaseAuthEnabled,
         verificationId,
-        isSignup: isSignupFlow,
-        role,
-        allParams: params
       });
     }
     
@@ -75,23 +65,16 @@ const OtpScreen: React.FC = () => {
     return () => clearTimeout(t);
   }, [secondsLeft, isFirebaseAuthEnabled]);
 
-  const resendOtp = async () => {
-    if (!canResend || loading) return;
-    setError(null);
-    setCanResend(false);
-    setSecondsLeft(60);
-    
-    try {
-      const result = await FirebasePhoneAuth.sendOTP(phone);
-      if (result.success && result.verificationId) {
-        setCurrentVerificationId(result.verificationId);
-      } else {
-        setError('Failed to resend OTP.');
-      }
-    } catch (error) {
-      setError('Failed to resend OTP.');
-    }
-  };
+  const resendOtp = async () =>
+    resendOtpHelper({
+      phone,
+      loading,
+      canResend,
+      setError,
+      setCanResend,
+      setSecondsLeft,
+      setCurrentVerificationId,
+    });
 
   const handleOtpChange = (raw: string, index: number) => {
     if (error) setError(null);
@@ -129,146 +112,35 @@ const OtpScreen: React.FC = () => {
     }
   };
 
-  const verifyOtp = async () => {
-    const otp = otpDigits.join('');
-    console.log('[DRIVER OTP] Verify button clicked, OTP:', otp, 'Length:', otp.length);
-    if (otp.length !== 6) {
-      console.log('[DRIVER OTP] OTP length not 6, returning');
-      return;
-    }
-    if (otp === lastAttemptedCode) {
-      console.log('[DRIVER OTP] Same OTP attempted, returning');
-      return;
-    }
-    
-    setLastAttemptedCode(otp);
-    setLoading(true);
-    setError(null);
-    
-    try {
-      console.log('[DRIVER OTP] Firebase auth enabled:', isFirebaseAuthEnabled);
-      console.log('[DRIVER OTP] Current verification ID:', currentVerificationId ? 'Present' : 'Missing');
-      
-      if (isFirebaseAuthEnabled && currentVerificationId) {
-        if (DEBUG) console.log('[DRIVER OTP] Firebase verification start');
-        
-        // Verify OTP with Firebase
-        const verificationResult = await FirebasePhoneAuth.verifyOTPWithVerificationId(currentVerificationId, otp);
-        if (!verificationResult.success || !verificationResult.idToken) {
-          setError(verificationResult.message || 'Invalid OTP. Please try again.');
-          return;
-        }
-        
-        if (DEBUG) console.log('[DRIVER OTP] Backend auth with driver role');
-        
-        // Authenticate with backend using driver role
-        const authResult = await FirebasePhoneAuth.authenticateWithBackend(
-          verificationResult.idToken,
-          'driver'
-        );
-        
-        if (!authResult.success) {
-          setError(authResult.message || 'Backend authentication failed');
-          return;
-        }
-        
-        if (!authResult.access_token) {
-          setError('No access token received from backend');
-          return;
-        }
-        
-        // Store tokens and role
-        await AsyncStorage.setItem('access_token', authResult.access_token);
-        await AsyncStorage.setItem('firebase_id_token', verificationResult.idToken);
-        if (authResult.refresh_token) {
-          await AsyncStorage.setItem('refresh_token', authResult.refresh_token);
-        }
-        await AsyncStorage.setItem('role', 'driver');
-        
-        // Short delay for better UX
-        await new Promise(r => setTimeout(r, 300));
-        
-        // Check if profile is complete
-        try {
-          const profileRes = await fetch(`${getServerUrl()}/driver/profile`, {
-            headers: { 
-              'Authorization': `Bearer ${authResult.access_token}`, 
-              'Content-Type': 'application/json' 
-            }
-          });
-          
-          if (profileRes.ok) {
-            const profileJson = await profileRes.json();
-            const driver = profileJson.driver || profileJson.data;
-            
-            // Check multiple indicators of profile completion
-            const isComplete = !!(driver && (
-              driver.profileCompleted === true || 
-              (driver.name && driver.vehicle && driver.vehicle.type && driver.vehicle.plateNumber)
-            ));
-            
-            if (isComplete) {
-              await AsyncStorage.setItem('profile_complete', 'true');
-              console.log('[DRIVER OTP] Existing user with complete profile, redirecting to dashboard');
-              router.replace('/navigation/MainTabs');
-              return;
-            } else {
-              console.log('[DRIVER OTP] Existing user with incomplete profile, redirecting to profile form');
-              router.replace({
-                pathname: '/screens/DriverProfileForm',
-                params: {
-                  access_token: authResult.access_token,
-                  user: JSON.stringify(authResult.user || {})
-                }
-              });
-              return;
-            }
-          } else if (profileRes.status === 404) {
-            // User doesn't exist, this is a new user
-            console.log('[DRIVER OTP] New user detected, redirecting to profile form');
-            router.replace({
-              pathname: '/screens/DriverProfileForm',
-              params: {
-                access_token: authResult.access_token,
-                user: JSON.stringify(authResult.user || {})
-              }
-            });
-            return;
-          }
-        } catch (profileError) {
-          console.warn('[DRIVER OTP] Profile check failed:', profileError);
-          // On error, default to profile form to be safe
-          router.replace({
-            pathname: '/screens/DriverProfileForm',
-            params: {
-              access_token: authResult.access_token,
-              user: JSON.stringify(authResult.user || {})
-            }
-          });
-          return;
-        }
-        return;
-      } else {
-        // Handle case when Firebase auth is not enabled or verification ID is missing
-        console.log('[DRIVER OTP] Firebase auth not enabled or verification ID missing');
-        if (!isFirebaseAuthEnabled) {
-          setError('Firebase authentication is not enabled');
-        } else if (!currentVerificationId) {
-          setError('Verification ID is missing. Please try sending OTP again.');
-        }
-        return;
+  // Create a navigation adapter for the OTP manager
+  const navigationAdapter = {
+    reset: ({ index, routes }: { index: number; routes: { name: string }[] }) => {
+      const routeName = routes[0]?.name;
+      if (routeName === 'MainTabs') {
+        router.replace('/navigation/MainTabs');
       }
-      
-      // Fallback for non-Firebase auth (if needed)
-      setError('Firebase authentication is required for driver registration');
-      
-    } catch (err: any) {
-      if (DEBUG) console.error('[DRIVER OTP] error', err);
-      setError(`Authentication failed: ${err?.message || 'Unknown error'}`);
-    } finally {
-      setLoading(false);
+    },
+    replace: (routeName: string, params?: any) => {
+      if (routeName === 'ProfileForm') {
+        router.replace('/screens/DriverProfileForm');
+      } else if (routeName === 'MainTabs') {
+        router.replace('/navigation/MainTabs');
+      }
     }
   };
+
+  const verifyOtp = async () =>
+    verifyOtpFlow({
+      otpDigits,
+      lastAttemptedCode,
+      setLastAttemptedCode,
+      isFirebaseAuth: isFirebaseAuthEnabled,
+      currentVerificationId,
+      phone,
+      setLoading,
+      setError,
+      navigation: navigationAdapter as any,
+    });
 
   const handleOtpKeyPress = (index: number, key: string) => {
     if (key === 'Backspace' && otpDigits[index] === '' && index > 0) {
@@ -327,7 +199,7 @@ const OtpScreen: React.FC = () => {
       )}
 
       <View style={[s.mb4]}>
-        {isFirebaseAuth && (
+        {isFirebaseAuthEnabled && (
           <Text style={[s.textSm, s.textCenter, s.textGray500]}>
             {canResend
               ? "You can request a new code."
@@ -339,22 +211,14 @@ const OtpScreen: React.FC = () => {
       <TouchableOpacity 
         style={[s.bgPrimary600, s.py3, s.px5, s.roundedLg, s.mb3, loading || 
         otpDigits.join("").length !== 6 ? s.opacity50 : null]} 
-        onPress={async () => {
-          console.log('[DRIVER OTP] Button pressed, OTP digits:', otpDigits);
-          console.log('[DRIVER OTP] Button disabled state:', loading || otpDigits.join("").length !== 6);
-          try {
-            await verifyOtp();
-          } catch (error) {
-            console.error('[DRIVER OTP] Error in button handler:', error);
-          }
-        }}
+        onPress={verifyOtp} 
         disabled={loading || otpDigits.join("").length !== 6}>
         <Text style={[s.textWhite, s.textCenter, s.fontSemibold]}>
           {loading ? "Verifying..." : "Verify OTP"}
         </Text>
       </TouchableOpacity>
 
-      {isFirebaseAuth && (
+      {isFirebaseAuthEnabled && (
         <TouchableOpacity
           onPress={resendOtp}
           disabled={!canResend || loading}

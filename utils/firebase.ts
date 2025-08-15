@@ -51,7 +51,11 @@ export class FirebasePhoneAuth {
     try {
       const credential = PhoneAuthProvider.credential(verificationId, code);
       const userCred = await authInstance.signInWithCredential(credential);
-      const idToken = await userCred.user.getIdToken();
+      
+      // Get a fresh ID token immediately after verification
+      const idToken = await userCred.user.getIdToken(true); // Force refresh to get fresh token
+      if (DEBUG) console.log('[OTP] Got fresh ID token after verification');
+      
       return { success: true, idToken };
     } catch (error: any) {
       if (DEBUG) console.warn('[OTP] manual code verification error', error);
@@ -59,6 +63,21 @@ export class FirebasePhoneAuth {
       if (error.code === 'auth/invalid-verification-code') errorMessage = 'Incorrect code.';
       if (error.code === 'auth/code-expired') errorMessage = 'Code expired. Request a new one.';
       return { success: false, message: errorMessage };
+    }
+  }
+
+  static async getFreshIdToken(): Promise<string | null> {
+    try {
+      const currentUser = authInstance.currentUser;
+      if (currentUser) {
+        const freshToken = await currentUser.getIdToken(true); // Force refresh
+        if (DEBUG) console.log('[AUTH] Fresh ID token obtained');
+        return freshToken;
+      }
+      return null;
+    } catch (error) {
+      if (DEBUG) console.error('[AUTH] Failed to get fresh ID token:', error);
+      return null;
     }
   }
 
@@ -95,6 +114,18 @@ export class FirebasePhoneAuth {
         return { success: true, message: 'Authentication successful', access_token: accessToken, refresh_token: refreshToken, user: data.user };
       } else {
         if (DEBUG) console.warn('[AUTH] failure body', data);
+        
+        // Handle specific token expiration errors
+        if (response.status === 401 || response.status === 500) {
+          if (data.message && (
+            data.message.includes('expired') || 
+            data.message.includes('id-token-expired') ||
+            data.message.includes('Firebase ID token has expired')
+          )) {
+            return { success: false, message: 'Authentication session expired. Please try again.' };
+          }
+        }
+        
         return { success: false, message: data.message || 'Backend authentication failed' };
       }
     } catch (error: any) {

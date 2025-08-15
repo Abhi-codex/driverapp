@@ -45,7 +45,7 @@ export async function verifyOtpFlow({
       if (DEBUG) console.log('[OTP FLOW] backend auth');
       const authResult = await FirebasePhoneAuth.authenticateWithBackend(
         verificationResult.idToken,
-        'doctor'
+        'driver'  // Changed from 'doctor' to 'driver'
       );
       if (!authResult.success) {
         setError(authResult.message || 'Backend authentication failed');
@@ -56,23 +56,42 @@ export async function verifyOtpFlow({
         return;
       }
       await AsyncStorage.setItem('access_token', authResult.access_token);
+      await AsyncStorage.setItem('firebase_id_token', verificationResult.idToken);
       if (authResult.refresh_token) {
         await AsyncStorage.setItem('refresh_token', authResult.refresh_token);
       }
+      await AsyncStorage.setItem('role', 'driver');
+      
       await new Promise(r => setTimeout(r, 300));
-      // Profile check
+      
+      // Profile check for driver
       let navigateTo: 'MainTabs' | 'ProfileForm' = 'ProfileForm';
       try {
-        const profileRes = await fetch(getServerUrl() + '/doctor/profile', {
-          headers: { 'Authorization': `Bearer ${authResult.access_token}`, 'Content-Type': 'application/json' }
+        const profileRes = await fetch(getServerUrl() + '/driver/profile', {  // Changed from /doctor/profile
+          headers: { 
+            'Authorization': `Bearer ${verificationResult.idToken}`,  // Use Firebase token for profile check
+            'Content-Type': 'application/json' 
+          }
         });
         if (profileRes.ok) {
           const profileJson = await profileRes.json();
-          const doctor = profileJson.doctor || profileJson;
-            const complete = !!(doctor && doctor.name && doctor.specialties && doctor.specialties.length > 0);
-          if (complete) navigateTo = 'MainTabs';
+          const driver = profileJson.driver || profileJson.data;  // Changed from doctor to driver
+          
+          // Check driver profile completion (different from doctor)
+          const complete = !!(driver && (
+            driver.profileCompleted === true || 
+            (driver.name && driver.vehicle && driver.vehicle.type && driver.vehicle.plateNumber)
+          ));
+          
+          if (complete) {
+            await AsyncStorage.setItem('profile_complete', 'true');
+            navigateTo = 'MainTabs';
+          }
         }
-      } catch {}
+      } catch (profileError) {
+        if (DEBUG) console.warn('[OTP FLOW] Profile check failed:', profileError);
+      }
+      
       if (navigateTo === 'MainTabs') {
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       } else {
@@ -93,13 +112,19 @@ export async function verifyOtpFlow({
       if (data.refresh_token) await AsyncStorage.setItem('refresh_token', data.refresh_token);
       await new Promise(r => setTimeout(r, 300));
       try {
-        const profileRes = await fetch(getServerUrl() + '/doctor/profile', {
+        const profileRes = await fetch(getServerUrl() + '/driver/profile', {  // Changed from /doctor/profile
           headers: { 'Authorization': `Bearer ${data.access_token}`, 'Content-Type': 'application/json' }
         });
         if (profileRes.ok) {
           const profileData = await profileRes.json();
-          const doctor = profileData.doctor || profileData;
-          if (doctor && doctor.name && doctor.specialties && doctor.specialties.length > 0) {
+          const driver = profileData.driver || profileData.data;  // Changed from doctor to driver
+          
+          // Check driver profile completion
+          if (driver && (
+            driver.profileCompleted === true || 
+            (driver.name && driver.vehicle && driver.vehicle.type && driver.vehicle.plateNumber)
+          )) {
+            await AsyncStorage.setItem('profile_complete', 'true');
             navigation.replace('MainTabs');
             return;
           }

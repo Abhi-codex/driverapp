@@ -15,28 +15,49 @@ export default function Page() {
 
   const checkAuthStatus = async () => {
     try {
-      const [accessToken, role, profileComplete] = await Promise.all([
+      // Small delay to prevent race conditions with profile completion
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Check if OTP verification is in progress - if so, don't interfere
+      const otpInProgress = await AsyncStorage.getItem('otp_verification_in_progress');
+      if (otpInProgress === 'true') {
+        console.log('[INDEX] OTP verification in progress, skipping auth check');
+        return;
+      }
+      
+      const [accessToken, role, profileComplete, firebaseToken] = await Promise.all([
         AsyncStorage.getItem('access_token'),
         AsyncStorage.getItem('role'),
-        AsyncStorage.getItem('profile_complete')
+        AsyncStorage.getItem('profile_complete'),
+        AsyncStorage.getItem('firebase_id_token')
       ]);
+
+      console.log('[INDEX] Auth check:', { 
+        hasAccessToken: !!accessToken, 
+        role, 
+        profileComplete,
+        hasFirebaseToken: !!firebaseToken 
+      });
 
       // Give a moment for splash screen
       setTimeout(() => {
         if (accessToken && role === 'driver') {
           if (profileComplete === 'true') {
             // User is authenticated and profile is complete
+            console.log('[INDEX] Redirecting to MainTabs - profile complete');
             router.replace('/navigation/MainTabs');
           } else {
             // User is authenticated but profile needs completion
-            router.replace('/screens/DriverProfile');
+            console.log('[INDEX] Redirecting to DriverProfileForm - profile incomplete');
+            router.replace('/screens/DriverProfileForm');
           }
         } else {
           // User not authenticated, go to login
+          console.log('[INDEX] Redirecting to DriverAuth - not authenticated');
           router.replace('/screens/DriverAuth');
         }
         setIsLoading(false);
-      }, 1000);
+      }, 800); // Reduced delay
     } catch (error) {
       console.error('Auth check error:', error);
       // On error, go to login
