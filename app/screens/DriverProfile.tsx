@@ -300,8 +300,8 @@ export default function DriverProfile() {
   }
 
   return (
-    <View style={[s.flex1, s.bgGray50]}>
-      <ScrollView style={[s.flex1]} contentContainerStyle={[s.p5, { paddingBottom: 100 }]}>
+    <View style={[s.flex1, s.mt8, s.bgGray50]}>
+      <ScrollView style={[s.flex1]} contentContainerStyle={[s.p5]}>
         {/* Profile Header Card */}
         <View style={[s.bgWhite, s.rounded3xl, s.p6, s.mb5, s.shadow, s.alignCenter]}>
           <View style={[s.w20, s.h20, s.bgEmergency100, s.roundedFull, s.alignCenter, s.justifyCenter, s.mb4]}>

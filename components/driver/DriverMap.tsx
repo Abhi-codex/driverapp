@@ -1,8 +1,9 @@
-import React, { memo, useEffect, useMemo, useRef } from "react";
-import { Text, View } from "react-native";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Text, View, TouchableOpacity } from "react-native";
 import { colors, styles } from "../../constants/tailwindStyles";
 import { Ride } from "../../types/rider";
 import { MapViewWrapper as MapView, MarkerWrapper as Marker, PolylineWrapper as Polyline } from "../MapView";
+import { MaterialIcons } from '@expo/vector-icons';
 
 interface DriverMapProps {
   driverLocation: {
@@ -28,11 +29,23 @@ function DriverMap({
 }: DriverMapProps) {
 
   const mountedRef = useRef(true);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [showFallback, setShowFallback] = useState(false);
+  
   useEffect(() => {
+    // Show fallback after 5 seconds if map hasn't loaded
+    const timeout = setTimeout(() => {
+      if (!mapLoaded) {
+        console.log('🗺️ Map loading timeout, showing fallback');
+        setShowFallback(true);
+      }
+    }, 5000);
+    
     return () => {
       mountedRef.current = false;
+      clearTimeout(timeout);
     };
-  }, []);
+  }, [mapLoaded]);
 
   // Stable memoized values to prevent re-renders
   const stableDriverLocation = useMemo(() => {
@@ -97,10 +110,8 @@ function DriverMap({
       longitudeDelta: driverLocation.longitudeDelta
     };
   }, [
-    driverLocation ? Math.round(driverLocation.latitude * 1000000) : 0,
-    driverLocation ? Math.round(driverLocation.longitude * 1000000) : 0,
-    driverLocation?.latitudeDelta || 0,
-    driverLocation?.longitudeDelta || 0
+    driverLocation ? Math.round(driverLocation.latitude * 100000) : 0,
+    driverLocation ? Math.round(driverLocation.longitude * 100000) : 0,
   ]);
 
   // Don't render anything if driver location is not available
@@ -114,12 +125,60 @@ function DriverMap({
     );
   }
 
+  console.log('🗺️ DriverMap - Rendering map with location:', stableDriverLocation);
+  console.log('🗺️ DriverMap - Map region:', mapRegion);
+  console.log('🗺️ DriverMap - Available rides:', stableAvailableRides.length);
+
+  console.log('🗺️ DriverMap - Rendering map with location:', stableDriverLocation);
+  console.log('🗺️ DriverMap - Map region:', mapRegion);
+  console.log('🗺️ DriverMap - Available rides:', stableAvailableRides.length);
+
+  // Show fallback if map loading failed
+  if (showFallback) {
+    return (
+      <View style={[styles.flex1, styles.alignCenter, styles.justifyCenter, styles.bgGray100]}>
+        <MaterialIcons name="map" size={64} color={colors.gray[400]} />
+        <Text style={[styles.textLg, styles.textGray600, styles.mt4, styles.fontMedium]}>
+          Map Loading Issue
+        </Text>
+        <Text style={[styles.textSm, styles.textGray500, styles.textCenter, styles.mt2, styles.px4]}>
+          The map is taking longer than expected to load. This might be due to network issues or Google Maps configuration.
+        </Text>
+        <View style={[styles.mt4, styles.bgWhite, styles.p4, styles.roundedLg, styles.mx4]}>
+          <Text style={[styles.textXs, styles.textGray600]}>
+            Location: {stableDriverLocation?.latitude.toFixed(4)}, {stableDriverLocation?.longitude.toFixed(4)}
+          </Text>
+          <Text style={[styles.textXs, styles.textGray600]}>
+            Rides nearby: {stableAvailableRides.length}
+          </Text>
+        </View>
+        <TouchableOpacity 
+          style={[styles.mt4, styles.bgPrimary600, styles.px4, styles.py2, styles.roundedLg]}
+          onPress={() => {
+            setShowFallback(false);
+            setMapLoaded(false);
+          }}
+        >
+          <Text style={[styles.textWhite, styles.fontMedium]}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.flex1]}>
       <MapView
         style={[styles.flex1]}
         region={mapRegion}
         showsUserLocation={true}
+        onMapReady={() => {
+          console.log('🗺️ DriverMap - Map is ready!');
+          setMapLoaded(true);
+        }}
+        onError={(error) => {
+          console.error('🗺️ DriverMap - Map error:', error);
+          setShowFallback(true);
+        }}
       >
         {/* Driver's current location marker */}
         {stableDriverLocation && (

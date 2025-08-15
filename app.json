@@ -30,7 +30,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
+          "apiKey": "AIzaSyBL8ds5GMZN_gXu9wjLbVIDSY_sPxgJL9Q"
         }
       },
       "compileSdkVersion": 34,
@@ -40,7 +40,7 @@
       "bundleIdentifier": "com.dhruva12.driverapp",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
-        "googleMapsApiKey": "process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
+        "googleMapsApiKey": "AIzaSyBL8ds5GMZN_gXu9wjLbVIDSY_sPxgJL9Q"
       }
     },
     "plugins": [

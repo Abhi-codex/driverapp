@@ -2,10 +2,9 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../constants/tailwindStyles';
 import DriverDashboard from '../screens/DriverDashboard';
-import DriverMap from '../screens/DriverMap';
 import DriverProfile from '../screens/DriverProfile';
 
 const Tab = createBottomTabNavigator();
@@ -15,14 +14,6 @@ function DashboardStack() {
   return (
     <Stack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
       <Stack.Screen name="DashboardMain" component={DriverDashboard} />
-    </Stack.Navigator>
-  );
-}
-
-function MapStack() {
-  return (
-    <Stack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="MapMain" component={DriverMap} />
     </Stack.Navigator>
   );
 }
@@ -76,27 +67,7 @@ export default function MainTabs() {
                   marginBottom: 5 
                 }} />
               )}
-              <Feather name="home" size={size} color={color} />
-            </View>
-          ),
-        }}
-      />
-      <Tab.Screen 
-        name="Map" 
-        component={MapStack}
-        options={{
-          tabBarIcon: ({ color, size, focused }) => (
-            <View style={{ alignItems: 'center' }}>
-              {focused && (
-                <View style={{ 
-                  width: 24, 
-                  height: 3, 
-                  backgroundColor: colors.primary[600], 
-                  borderRadius: 2, 
-                  marginBottom: 5 
-                }} />
-              )}
-              <Feather name="map" size={size} color={color} />
+              <MaterialIcons name="dashboard" size={size} color={color} />
             </View>
           ),
         }}

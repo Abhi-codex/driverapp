@@ -4,14 +4,34 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { styles as s, colors } from '../../constants/tailwindStyles';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRiderLogic } from '../../hooks/useRiderLogic';
+import { WelcomeHeader } from '../../components/dashboard/WelcomeHeader';
+import Drive from '../../components/dashboard/Drive';
 
 export default function DriverDashboard() {
   const router = useRouter();
   const [driverName, setDriverName] = useState('Driver');
+  const [showMenu, setShowMenu] = useState(false);
+  
+  // Use rider logic for online status management and stats
+  const { 
+    online, 
+    toggleOnline, 
+    availableRides, 
+    driverStats,
+    fetchDriverStats 
+  } = useRiderLogic();
 
   useEffect(() => {
     checkAuth();
   }, []);
+
+  // Fetch stats when component mounts or when online status changes
+  useEffect(() => {
+    if (online) {
+      fetchDriverStats();
+    }
+  }, [online, fetchDriverStats]);
 
   const checkAuth = async () => {
     try {
@@ -59,56 +79,96 @@ export default function DriverDashboard() {
     );
   };
 
-  const navigateToProfile = () => {
-    router.push('/screens/DriverProfile');
+  // Toggle the small dropdown menu anchored to the driver name
+  const toggleMenu = () => setShowMenu((v) => !v);
+
+  // Close menu helper (useful if we later add outside click handling)
+  const closeMenu = () => setShowMenu(false);
+
+  // Handle navigation to map - check if online first
+  const handleNavigateToMap = () => {
+    if (!online) {
+      Alert.alert(
+        'Go Online',
+        'You need to be online to access the map and accept emergency calls. Would you like to go online now?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Go Online',
+            onPress: async () => {
+              await toggleOnline(); // This will set online to true
+              // Navigate after a brief delay to ensure state updates
+              setTimeout(() => {
+                router.push('/screens/DriverMap');
+              }, 100);
+            }
+          }
+        ]
+      );
+    } else {
+      router.push('/screens/DriverMap');
+    }
   };
 
   return (
-    <View style={[s.flex1, s.bgGray50]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f9fafb" />
-      
+    <View style={[s.flex1, s.pt4, s.bgGray50]}>
+      <StatusBar barStyle="dark-content" />
       {/* Header with user info */}
-      <View style={[s.flexRow, s.justifyBetween, s.alignCenter, s.p5, s.bgWhite, s.shadow]}>
-        <Text style={[s.textXl, s.fontBold, s.textGray800]}>Dashboard</Text>
+      <View style={[s.flexRow, s.justifyBetween, s.alignCenter, s.p5]}>
+        <Text style={[s.text3xl, s.fontBold, s.textPrimary600]}>InstaAid</Text>
         
-        <View style={[s.flexRow, s.alignCenter]}>
-          <TouchableOpacity 
-            onPress={navigateToProfile}
-            style={[s.flexRow, s.alignCenter, s.bgPrimary100, s.px3, s.py2, s.roundedFull, s.mr3]}
-          >
-            <MaterialIcons name="person" size={20} color={colors.primary[600]} />
-            <Text style={[s.textSm, s.fontSemibold, s.textPrimary700, s.ml1]}>{driverName}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            onPress={handleLogout}
-            style={[s.p2, s.bgGray100, s.roundedFull]}
-          >
-            <MaterialIcons name="logout" size={20} color={colors.gray[600]} />
-          </TouchableOpacity>
+        <View style={[s.flexRow, s.alignCenter]}> 
+          {/* Name button with anchored dropdown menu */}
+          <View style={{ position: 'relative' }}>
+            <TouchableOpacity
+              onPress={toggleMenu}
+              style={[s.flexRow, s.alignCenter, s.bgPrimary100, s.px3, s.py2, s.roundedFull]}
+            >
+              <MaterialIcons name="person" size={20} color={colors.primary[600]} />
+              <Text style={[s.textSm, s.fontSemibold, s.textPrimary700, s.ml1]}>{driverName}</Text>
+            </TouchableOpacity>
+
+            {showMenu && (
+              <View
+                style={[
+                  { position: 'absolute', top: 44, right: 0, minWidth: 140 },
+                  s.bgWhite,
+                  s.roundedLg,
+                  s.shadow,
+                  { zIndex: 999 }
+                ]}
+              >
+                <TouchableOpacity
+                  onPress={() => {
+                    closeMenu();
+                    handleLogout();
+                  }}
+                  style={[s.px4, s.py3]}
+                >
+                  <Text style={[s.textBase, s.textGray800]}>Logout</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
-      {/* Main content area - simplified for now */}
-      <View style={[s.flex1, s.justifyCenter, s.alignCenter, s.p6]}>
-        <View style={[s.bgWhite, s.rounded3xl, s.p6, s.shadow, s.alignCenter]}>
-          <MaterialIcons name="dashboard" size={80} color={colors.primary[600]} />
-          <Text style={[s.text2xl, s.fontBold, s.textGray800, s.mt4, s.textCenter]}>
-            Driver Dashboard
-          </Text>
-          <Text style={[s.textBase, s.textGray600, s.mt2, s.textCenter]}>
-            Dashboard content coming soon...
-          </Text>
-          
-          <TouchableOpacity 
-            onPress={navigateToProfile}
-            style={[s.bgPrimary600, s.px5, s.py3, s.roundedXl, s.mt6]}
-          >
-            <Text style={[s.textBase, s.fontSemibold, s.textWhite]}>
-              View Profile & Stats
-            </Text>
-          </TouchableOpacity>
-        </View>
+      {/* Main content area with WelcomeHeader and Drive component */}
+      <View style={[s.flex1, s.px4]}>
+        {/* Welcome Header with online status toggle */}
+        <WelcomeHeader 
+          driverName={driverName}
+          onProfilePress={() => router.push('/screens/DriverProfile')}
+          isOnline={online}
+          toggleOnlineStatus={toggleOnline}
+        />
+        
+        {/* Drive Component */}
+        <Drive 
+          isOnline={online}
+          availableRidesCount={availableRides.length}
+          onPress={handleNavigateToMap}
+        />
       </View>
     </View>
   );

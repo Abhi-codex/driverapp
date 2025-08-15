@@ -2,10 +2,12 @@ import DriverDrawer from "../../components/driver/DriverDrawer";
 import DriverMap from "../../components/driver/DriverMap";
 import * as Location from "expo-location";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Dimensions, StatusBar, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Dimensions, StatusBar, Text, View, TouchableOpacity } from "react-native";
 import { runOnJS, useAnimatedGestureHandler, useSharedValue, withSpring } from "react-native-reanimated";
 import { colors, styles } from "../../constants/tailwindStyles";
 import { useRiderLogic } from "../../hooks/useRiderLogic";
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 const { height: screenHeight } = Dimensions.get("window");
 
@@ -16,9 +18,11 @@ const SNAP_POINTS = {
 };
 
 export default function DriverMapScreen() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [driverLocation, setDriverLocation] = useState<any>(null);
   const [currentSnapPoint, setCurrentSnapPoint] = useState<"MINIMIZED" | "PARTIAL" | "FULL">("MINIMIZED");
+  const [locationSubscription, setLocationSubscription] = useState<any>(null);
   
   const translateY = useSharedValue(SNAP_POINTS.MINIMIZED);
   const autoExpandedRideId = useRef<string | null>(null);
@@ -34,7 +38,7 @@ export default function DriverMapScreen() {
     toggleOnline,
     updateRideStatus,
     driverStats,
-  } = useRiderLogic();
+  } = useRiderLogic(driverLocation); // Pass driverLocation to the hook
 
   // Auto-expand drawer when ride is accepted
   useEffect(() => {
@@ -140,13 +144,16 @@ export default function DriverMapScreen() {
   // Memoize location initialization to prevent re-runs
   const initializeLocationTracking = React.useCallback(async () => {
     try {
+      setLoading(true);
+      console.log('🎯 Starting location initialization...');
+      
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
           "Location Permission Required",
           "Please enable location access to use the driver map.",
           [
-            { text: "Cancel", style: "cancel" },
+            { text: "Cancel", style: "cancel", onPress: () => router.back() },
             { text: "Open Settings", onPress: () => Location.requestForegroundPermissionsAsync() },
           ]
         );
@@ -154,38 +161,90 @@ export default function DriverMapScreen() {
         return;
       }
 
+      console.log('📍 Location permission granted, getting current position...');
+      
+      // Get initial position
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      
+      const newRegion = {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      
+      console.log('📍 Initial location set:', newRegion);
+      setDriverLocation(newRegion);
+      setLoading(false);
+
+      // Start watching position
       const subscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          timeInterval: 2000,
-          distanceInterval: 10,
+          timeInterval: 5000, // Update every 5 seconds
+          distanceInterval: 20, // Update when moved 20 meters
         },
         (location) => {
-          const newRegion = {
+          const updatedRegion = {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
           };
-          setDriverLocation(newRegion);
+          console.log('📍 Location updated:', updatedRegion);
+          setDriverLocation(updatedRegion);
         }
       );
 
-      return () => subscription.remove();
+      setLocationSubscription(subscription);
+      console.log('✅ Location tracking initialized successfully');
     } 
     catch (error) {
-      console.error("Error getting location:", error);
+      console.error("❌ Error getting location:", error);
       Alert.alert(
         "Location Error",
-        "Unable to get your current location. Please check your location settings."
+        "Unable to get your current location. Please check your location settings.",
+        [
+          { text: "Retry", onPress: initializeLocationTracking },
+          { text: "Go Back", onPress: () => router.back() }
+        ]
       );
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     initializeLocationTracking();
+    
+    // Cleanup location subscription on unmount
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+        console.log('🧹 Location subscription cleaned up');
+      }
+    };
   }, [initializeLocationTracking]);
+  
+  // Check online status and redirect if offline
+  useEffect(() => {
+    if (!loading && !online) {
+      Alert.alert(
+        'Offline Mode',
+        'You are currently offline. Please go online to accept rides.',
+        [
+          { text: 'Go Back', onPress: () => router.back() },
+          { 
+            text: 'Go Online', 
+            onPress: async () => {
+              await toggleOnline();
+            }
+          }
+        ]
+      );
+    }
+  }, [online, loading, toggleOnline, router]);
 
   if (loading) {
     return (
@@ -194,12 +253,56 @@ export default function DriverMapScreen() {
         <Text style={[styles.mt4, styles.textBase, styles.textGray600]}>
           Initializing location...
         </Text>
+        <Text style={[styles.mt2, styles.textSm, styles.textGray500, styles.textCenter, styles.px4]}>
+          Please ensure location services are enabled for InstaAid
+        </Text>
+      </View>
+    );
+  }
+
+  if (!driverLocation) {
+    return (
+      <View style={[styles.flex1, styles.justifyCenter, styles.alignCenter, styles.bgGray50]}>
+        <MaterialIcons name="location-off" size={64} color={colors.gray[400]} />
+        <Text style={[styles.mt4, styles.textBase, styles.textGray600]}>
+          Unable to access location
+        </Text>
+        <TouchableOpacity 
+          style={[styles.mt4, styles.bgPrimary600, styles.px5, styles.py3, styles.roundedLg]}
+          onPress={initializeLocationTracking}
+        >
+          <Text style={[styles.textWhite, styles.fontMedium]}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
   return (
     <View style={[styles.flex1, styles.bgGray50, styles.pt8]}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent/>
+      
+      {/* Back Button */}
+      <View style={[styles.absolute, { top: 50, left: 20, zIndex: 1000 }]}>
+        <TouchableOpacity
+          style={[styles.bgWhite, styles.roundedFull, styles.p3, styles.shadow]}
+          onPress={() => router.back()}
+        >
+          <MaterialIcons name="arrow-back" size={24} color={colors.gray[700]} />
+        </TouchableOpacity>
+      </View>
+      
+      {/* Online Status Indicator */}
+      <View style={[styles.absolute, { top: 50, right: 20, zIndex: 1000 }]}>
+        <View style={[styles.flexRow, styles.alignCenter, styles.bgWhite, styles.roundedFull, styles.px4, styles.py2, styles.shadow]}>
+          <View style={[
+            styles.w3, styles.h3, styles.roundedFull, styles.mr2,
+            { backgroundColor: online ? '#10B981' : '#EF4444' }
+          ]} />
+          <Text style={[styles.textSm, styles.fontMedium, { color: online ? '#059669' : '#DC2626' }]}>
+            {online ? 'Online' : 'Offline'}
+          </Text>
+        </View>
+      </View>
+
       {driverLocation && (
         <DriverMap
           driverLocation={driverLocation}

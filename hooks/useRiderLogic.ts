@@ -106,7 +106,13 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
   }, []);
 
   const makeAuthenticatedRequest = useCallback(async (url: string, options: RequestInit = {}) => {
-    const token = await AsyncStorage.getItem("access_token");
+    // Try Firebase ID token first (preferred for driver endpoints)
+    let token = await AsyncStorage.getItem("firebase_id_token");
+    
+    // Fallback to access token if no Firebase token
+    if (!token) {
+      token = await AsyncStorage.getItem("access_token");
+    }
     
     if (!token) {
       throw new Error('No authentication token found');
@@ -123,7 +129,24 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
 
     if (!response.ok) {
       if (response.status === 401) {
-        // Try to refresh token
+        // If Firebase token failed, try access token as fallback
+        const fallbackToken = await AsyncStorage.getItem("access_token");
+        if (fallbackToken && token !== fallbackToken) {
+          const retryResponse = await fetch(url, {
+            ...options,
+            headers: {
+              'Authorization': `Bearer ${fallbackToken}`,
+              'Content-Type': 'application/json',
+              ...options.headers,
+            },
+          });
+          
+          if (retryResponse.ok) {
+            return retryResponse.json();
+          }
+        }
+        
+        // Try to refresh token as last resort
         await refreshAuthToken();
         throw new Error('Authentication failed');
       }
@@ -164,10 +187,14 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
 
   const updateOnlineStatus = useCallback(async (isOnline: boolean) => {
     try {
+      console.log(`🔄 Updating online status to: ${isOnline}`);
+      
       await makeAuthenticatedRequest(`${getServerUrl()}/driver/online-status`, {
         method: 'PUT',
         body: JSON.stringify({ isOnline }),
       });
+      
+      console.log('✅ Online status updated successfully');
       
       // Update local profile state using functional update to avoid dependency
       setDriverProfile(prevProfile => {
@@ -177,6 +204,7 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
         return prevProfile;
       });
     } catch (error) {
+      console.error('❌ Failed to update online status:', error);
       handleApiError(error, 'Update online status');
     }
   }, [makeAuthenticatedRequest, handleApiError]); // Remove driverProfile dependency
@@ -202,14 +230,17 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
     try {
       isLoadingRides.current = true;
       setError(null);
+      console.log('🔄 Fetching available rides...');
 
       const data: RideResponse = await makeAuthenticatedRequest(`${getServerUrl()}/ride/driverrides`);
 
       if (data.rides && Array.isArray(data.rides)) {
         const searchingRides = data.rides.filter((ride: Ride) => ride.status === RideStatus.SEARCHING);
+        console.log(`📋 Found ${searchingRides.length} searching rides`);
 
         // Filter by 10km radius if driverLocation is available, and skip invalid coordinates
         let filteredRides = searchingRides;
+        console.log('📍 Driver location for filtering:', driverLocation);
         if (driverLocation && typeof driverLocation.latitude === 'number' && typeof driverLocation.longitude === 'number') {
           filteredRides = searchingRides.filter((ride: Ride) => {
             if (!ride.pickup ||
@@ -221,7 +252,7 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
                 ride.pickup.latitude === 0 ||
                 ride.pickup.longitude === 0
             ) {
-              console.warn('Skipping ride due to invalid pickup coordinates:', ride);
+              console.warn('⚠️ Skipping ride due to invalid pickup coordinates:', ride._id);
               return false;
             }
             const dist = getDistanceFromLatLonInKm(
@@ -230,6 +261,7 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
               ride.pickup.latitude,
               ride.pickup.longitude
             );
+            console.log(`📏 Distance to ride ${ride._id}: ${dist.toFixed(2)}km`);
             if (dist > 10) {
               // Optionally log rides out of range for debugging
               // console.info('Ride out of 10km range:', ride, 'Distance:', dist);
@@ -237,11 +269,14 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
             return dist <= 10;
           });
         }
+        console.log(`✅ Filtered rides (within 10km): ${filteredRides.length}`);
         setAvailableRides(filteredRides);
       } else {
+        console.log('📋 No rides data received');
         setAvailableRides([]);
       }
     } catch (error) {
+      console.error('❌ Failed to fetch available rides:', error);
       handleApiError(error, 'Fetch available rides');
       setAvailableRides([]);
     } finally {
@@ -364,12 +399,16 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
   const fetchDriverStats = useCallback(async () => {
     try {
       setError(null);
+      console.log('🔄 Fetching driver stats...');
+      
       const data: ApiResponse<DriverStats> = await makeAuthenticatedRequest(`${getServerUrl()}/driver/stats`);
       
       if (data.data) {
         setDriverStats(data.data);
+        console.log('✅ Driver stats fetched successfully:', data.data);
       }
     } catch (error) {
+      console.error('❌ Failed to fetch driver stats:', error);
       handleApiError(error, 'Fetch driver statistics');
     }
   }, [makeAuthenticatedRequest, handleApiError]);
@@ -475,21 +514,6 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
     // Optionally, you could call an API endpoint to notify backend about rejection
   }, []);
 
-  const toggleOnline = useCallback(() => {
-    setOnline(prevOnline => {
-      const newOnlineState = !prevOnline;
-      
-      if (newOnlineState) {
-        // Don't call checkAuthState immediately to prevent re-render loops
-        setTimeout(() => {
-          checkAuthState();
-        }, 100);
-      }
-      
-      return newOnlineState;
-    });
-  }, []); // Remove online dependency to prevent re-creation
-
   const checkAuthState = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("access_token");
@@ -507,6 +531,34 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
       setOnline(prevOnline => prevOnline ? false : prevOnline);
     }
   }, [makeAuthenticatedRequest]);
+
+  const toggleOnline = useCallback(async () => {
+    const newOnlineState = !online;
+    
+    try {
+      // Update backend first
+      await updateOnlineStatus(newOnlineState);
+      
+      // Update local state only if backend update succeeds
+      setOnline(newOnlineState);
+      
+      if (newOnlineState) {
+        // Check auth state after going online
+        try {
+          const token = await AsyncStorage.getItem("access_token");
+          if (token) {
+            await makeAuthenticatedRequest(`${getServerUrl()}/driver/profile`);
+          }
+        } catch (error) {
+          console.warn('Auth check failed after going online:', error);
+        }
+      }
+    } catch (error) {
+      // If backend update fails, don't change local state
+      console.error('Failed to update online status:', error);
+      handleApiError(error, 'Update online status');
+    }
+  }, [online, updateOnlineStatus, makeAuthenticatedRequest, handleApiError]);
 
   // Add method to get driver's ride history
   const fetchDriverRideHistory = useCallback(async (page: number = 1, limit: number = 10) => {

@@ -26,15 +26,10 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({
   }
 
   return (
-    <View style={[styles.bgEmergency100, styles.rounded3xl, styles.px5, styles.py6, styles.mb3, styles.shadowSm, { position: 'relative' }]}> 
-      {/* Edit Profile button */}
-      <TouchableOpacity style={{ position: 'absolute', top: 18, right: 18, zIndex: 10 }} onPress={onProfilePress}>
-        <MaterialCommunityIcons name="circle-edit-outline" size={32} color={colors.black} />
-      </TouchableOpacity>
-
+    <View style={[styles.bgPrimary100, styles.rounded3xl, styles.px5, styles.py6, styles.mb3, styles.shadowSm, { position: 'relative' }]}> 
       <View style={{ alignItems: "center", justifyContent: "center", marginBottom: 2 }}>
         {/* Large doctor icon */}
-        <MaterialCommunityIcons name="doctor" size={64} color={colors.black} />
+        <MaterialCommunityIcons name="doctor" size={64} color={colors.primary[600]} />
       </View>
       <Text style={[styles.text2xl, styles.fontBold, styles.textGray900, styles.textCenter]}>
         {greeting}, {driverName}
@@ -43,12 +38,12 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({
         Manage rides and track your stats here.
       </Text>
       <View style={[styles.flexRow, styles.alignCenter, styles.justifyCenter]}> 
-        <Text style={[styles.textBase, styles.fontMedium, isOnline ? styles.textEmergency600 : styles.textGray600, { marginRight: 6 }]}>
+        <Text style={[styles.textBase, styles.fontMedium, isOnline ? styles.textPrimary600 : styles.textGray600, { marginRight: 6 }]}>
           {isOnline ? "CURRENTLY ONLINE" : "CURRENTLY OFFLINE"}
         </Text>
         {/* Toggle button for online/offline */}
         <TouchableOpacity onPress={toggleOnlineStatus}>
-          <MaterialCommunityIcons name={isOnline ? "toggle-switch-outline" : "toggle-switch-off-outline"} size={45} color={isOnline ? colors.emergency[500] : colors.gray[600]} />
+          <MaterialCommunityIcons name={isOnline ? "toggle-switch-outline" : "toggle-switch-off-outline"} size={45} color={isOnline ? colors.primary[600] : colors.gray[600]} />
         </TouchableOpacity>
       </View>
     </View>
