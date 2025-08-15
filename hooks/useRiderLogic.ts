@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 import { ApiResponse, Driver, DriverStats, Ride, RideResponse, RideStatus } from '../types/rider';
 import { getServerUrl } from '../utils/network';
 
-export const useRiderLogic = (driverLocation?: { latitude: number; longitude: number }) => {
+export const useRiderLogic = () => {
   const [routeCoords, setRouteCoords] = useState<Array<{ latitude: number; longitude: number }>>([]);
   const [destination, setDestination] = useState<{ latitude: number; longitude: number } | null>(null);
   const [tripStarted, setTripStarted] = useState(false);
@@ -13,6 +13,9 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
   const [acceptedRide, setAcceptedRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Store current driver location in the hook
+  const [currentDriverLocation, setCurrentDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   
   // Driver statistics and profile data with proper types
   const [driverStats, setDriverStats] = useState<DriverStats>({
@@ -230,18 +233,19 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
     try {
       isLoadingRides.current = true;
       setError(null);
-      console.log('🔄 Fetching available rides...');
+      // Reduced logging frequency
+      // console.log('🔄 Fetching available rides...');
 
       const data: RideResponse = await makeAuthenticatedRequest(`${getServerUrl()}/ride/driverrides`);
 
       if (data.rides && Array.isArray(data.rides)) {
         const searchingRides = data.rides.filter((ride: Ride) => ride.status === RideStatus.SEARCHING);
-        console.log(`📋 Found ${searchingRides.length} searching rides`);
+        // console.log(`📋 Found ${searchingRides.length} searching rides`);
 
-        // Filter by 10km radius if driverLocation is available, and skip invalid coordinates
+        // Filter by 10km radius if currentDriverLocation is available, and skip invalid coordinates
         let filteredRides = searchingRides;
-        console.log('📍 Driver location for filtering:', driverLocation);
-        if (driverLocation && typeof driverLocation.latitude === 'number' && typeof driverLocation.longitude === 'number') {
+        // console.log('📍 Driver location for filtering:', currentDriverLocation);
+        if (currentDriverLocation && typeof currentDriverLocation.latitude === 'number' && typeof currentDriverLocation.longitude === 'number') {
           filteredRides = searchingRides.filter((ride: Ride) => {
             if (!ride.pickup ||
                 typeof ride.pickup.latitude !== 'number' ||
@@ -256,12 +260,12 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
               return false;
             }
             const dist = getDistanceFromLatLonInKm(
-              driverLocation.latitude,
-              driverLocation.longitude,
+              currentDriverLocation.latitude,
+              currentDriverLocation.longitude,
               ride.pickup.latitude,
               ride.pickup.longitude
             );
-            console.log(`📏 Distance to ride ${ride._id}: ${dist.toFixed(2)}km`);
+            // console.log(`📏 Distance to ride ${ride._id}: ${dist.toFixed(2)}km`);
             if (dist > 10) {
               // Optionally log rides out of range for debugging
               // console.info('Ride out of 10km range:', ride, 'Distance:', dist);
@@ -269,10 +273,10 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
             return dist <= 10;
           });
         }
-        console.log(`✅ Filtered rides (within 10km): ${filteredRides.length}`);
+        // console.log(`✅ Filtered rides (within 10km): ${filteredRides.length}`);
         setAvailableRides(filteredRides);
       } else {
-        console.log('📋 No rides data received');
+        // console.log('📋 No rides data received');
         setAvailableRides([]);
       }
     } catch (error) {
@@ -282,7 +286,7 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
     } finally {
       isLoadingRides.current = false;
     }
-  }, [makeAuthenticatedRequest, handleApiError, driverLocation]);
+  }, [makeAuthenticatedRequest, handleApiError]); // Remove currentDriverLocation from dependencies
 
   const decodePolyline = (t: string) => {
     let points = [], index = 0, lat = 0, lng = 0;
@@ -630,6 +634,7 @@ export const useRiderLogic = (driverLocation?: { latitude: number; longitude: nu
     fetchDriverProfile,
     fetchDriverRideHistory,
     updateVehicleInfo,
+    updateDriverLocation: setCurrentDriverLocation,
     
     // Utilities
     clearError: () => setError(null),

@@ -37,8 +37,9 @@ export default function DriverMapScreen() {
     handleRejectRide,
     toggleOnline,
     updateRideStatus,
+    updateDriverLocation,
     driverStats,
-  } = useRiderLogic(driverLocation); // Pass driverLocation to the hook
+  } = useRiderLogic(); // Remove driverLocation parameter to prevent continuous refresh
 
   // Auto-expand drawer when ride is accepted
   useEffect(() => {
@@ -177,14 +178,15 @@ export default function DriverMapScreen() {
       
       console.log('📍 Initial location set:', newRegion);
       setDriverLocation(newRegion);
+      updateDriverLocation(newRegion); // Update the hook's location
       setLoading(false);
 
-      // Start watching position
+      // Start watching position with optimized settings
       const subscription = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 5000, // Update every 5 seconds
-          distanceInterval: 20, // Update when moved 20 meters
+          accuracy: Location.Accuracy.Balanced, // Changed from High to Balanced
+          timeInterval: 10000, // Update every 10 seconds instead of 5
+          distanceInterval: 50, // Update when moved 50 meters instead of 20
         },
         (location) => {
           const updatedRegion = {
@@ -193,8 +195,10 @@ export default function DriverMapScreen() {
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
           };
-          console.log('📍 Location updated:', updatedRegion);
+          // Reduced logging frequency
+          // console.log('📍 Location updated:', updatedRegion);
           setDriverLocation(updatedRegion);
+          updateDriverLocation(updatedRegion); // Update the hook's location
         }
       );
 
@@ -288,19 +292,6 @@ export default function DriverMapScreen() {
         >
           <MaterialIcons name="arrow-back" size={24} color={colors.gray[700]} />
         </TouchableOpacity>
-      </View>
-      
-      {/* Online Status Indicator */}
-      <View style={[styles.absolute, { top: 50, right: 20, zIndex: 1000 }]}>
-        <View style={[styles.flexRow, styles.alignCenter, styles.bgWhite, styles.roundedFull, styles.px4, styles.py2, styles.shadow]}>
-          <View style={[
-            styles.w3, styles.h3, styles.roundedFull, styles.mr2,
-            { backgroundColor: online ? '#10B981' : '#EF4444' }
-          ]} />
-          <Text style={[styles.textSm, styles.fontMedium, { color: online ? '#059669' : '#DC2626' }]}>
-            {online ? 'Online' : 'Offline'}
-          </Text>
-        </View>
       </View>
 
       {driverLocation && (

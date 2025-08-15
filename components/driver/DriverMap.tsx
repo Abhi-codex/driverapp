@@ -125,13 +125,10 @@ function DriverMap({
     );
   }
 
-  console.log('🗺️ DriverMap - Rendering map with location:', stableDriverLocation);
-  console.log('🗺️ DriverMap - Map region:', mapRegion);
-  console.log('🗺️ DriverMap - Available rides:', stableAvailableRides.length);
-
-  console.log('🗺️ DriverMap - Rendering map with location:', stableDriverLocation);
-  console.log('🗺️ DriverMap - Map region:', mapRegion);
-  console.log('🗺️ DriverMap - Available rides:', stableAvailableRides.length);
+  // Debug logs (removed duplicates to prevent re-render loops)
+  // console.log('🗺️ DriverMap - Rendering map with location:', stableDriverLocation);
+  // console.log('🗺️ DriverMap - Map region:', mapRegion);
+  // console.log('🗺️ DriverMap - Available rides:', stableAvailableRides.length);
 
   // Show fallback if map loading failed
   if (showFallback) {
