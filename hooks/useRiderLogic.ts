@@ -108,7 +108,7 @@ export const useRiderLogic = () => {
     }
   }, []);
 
-  const makeAuthenticatedRequest = useCallback(async (url: string, options: RequestInit = {}) => {
+  const makeAuthenticatedRequest = useCallback(async (url: string, options: RequestInit = {}, timeout: number = 10000) => {
     // Try Firebase ID token first (preferred for driver endpoints)
     let token = await AsyncStorage.getItem("firebase_id_token");
     
@@ -121,44 +121,77 @@ export const useRiderLogic = () => {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        // If Firebase token failed, try access token as fallback
-        const fallbackToken = await AsyncStorage.getItem("access_token");
-        if (fallbackToken && token !== fallbackToken) {
-          const retryResponse = await fetch(url, {
-            ...options,
-            headers: {
-              'Authorization': `Bearer ${fallbackToken}`,
-              'Content-Type': 'application/json',
-              ...options.headers,
-            },
-          });
-          
-          if (retryResponse.ok) {
-            return retryResponse.json();
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          // If Firebase token failed, try access token as fallback
+          const fallbackToken = await AsyncStorage.getItem("access_token");
+          if (fallbackToken && token !== fallbackToken) {
+            const retryController = new AbortController();
+            const retryTimeoutId = setTimeout(() => retryController.abort(), timeout);
+            
+            try {
+              const retryResponse = await fetch(url, {
+                ...options,
+                headers: {
+                  'Authorization': `Bearer ${fallbackToken}`,
+                  'Content-Type': 'application/json',
+                  ...options.headers,
+                },
+                signal: retryController.signal,
+              });
+              
+              clearTimeout(retryTimeoutId);
+              
+              if (retryResponse.ok) {
+                return retryResponse.json();
+              }
+            } catch (retryError) {
+              clearTimeout(retryTimeoutId);
+              throw retryError;
+            }
           }
+          
+          // Try to refresh token as last resort
+          await refreshAuthToken();
+          throw new Error('Authentication failed');
         }
         
-        // Try to refresh token as last resort
-        await refreshAuthToken();
-        throw new Error('Authentication failed');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      
+      // Handle specific network errors
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out - server may be starting up');
       }
       
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      if (error.message?.includes('NetworkError') || error.message?.includes('fetch')) {
+        throw new Error('Network error - server may be unavailable');
+      }
+      
+      throw error;
     }
-
-    return response.json();
   }, []);
 
   const refreshAuthToken = useCallback(async () => {
@@ -413,7 +446,16 @@ export const useRiderLogic = () => {
       }
     } catch (error) {
       console.error('❌ Failed to fetch driver stats:', error);
-      handleApiError(error, 'Fetch driver statistics');
+      
+      // Don't show error alerts for server startup issues
+      const errorMessage = error.message || '';
+      if (errorMessage.includes('timeout') || errorMessage.includes('starting up') || errorMessage.includes('unavailable')) {
+        console.log('📡 Server may be starting up, will retry later...');
+        setError('Server connecting...');
+        // Don't call handleApiError for these cases
+      } else {
+        handleApiError(error, 'Fetch driver statistics');
+      }
     }
   }, [makeAuthenticatedRequest, handleApiError]);
 
