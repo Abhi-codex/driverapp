@@ -6,6 +6,15 @@ import { getServerUrl } from './network';
 const authInstance = getAuth(getApp());
 const DEBUG = __DEV__ === true;
 
+// Disable reCAPTCHA for phone auth to prevent browser redirects
+if (authInstance && authInstance.settings) {
+  try {
+    authInstance.settings.appVerificationDisabledForTesting = false;
+  } catch (error) {
+    console.log('[Firebase] Could not configure app verification settings');
+  }
+}
+
 export interface FirebaseUser {
   uid: string;
   phoneNumber: string | null;

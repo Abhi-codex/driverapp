@@ -4,10 +4,17 @@
     "web": {
       "bundler": "metro"
     },
-    "name": "driverapp",
+    "name": "InstaAid Driver",
     "slug": "driverapp",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/images/logo.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/images/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "platforms": [
       "ios",
       "android"
@@ -18,15 +25,17 @@
       }
     },
     "android": {
-      "package": "com.dhruva12.driverapp",
+      "package": "com.dhruva12.instaaid.driver",
       "googleServicesFile": "./google-services.json",
+      "versionCode": 1,
       "permissions": [
         "android.permission.RECEIVE_SMS",
         "android.permission.READ_SMS",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CALL_PHONE"
       ],
       "config": {
         "googleMaps": {
@@ -34,10 +43,14 @@
         }
       },
       "compileSdkVersion": 34,
-      "targetSdkVersion": 34
+      "targetSdkVersion": 34,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "ios": {
-      "bundleIdentifier": "com.dhruva12.driverapp",
+      "bundleIdentifier": "com.dhruva12.instaaid.driver",
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "googleMapsApiKey": "AIzaSyBL8ds5GMZN_gXu9wjLbVIDSY_sPxgJL9Q"
@@ -51,9 +64,13 @@
           "android": {
             "requestVerificationCodeAutomatically": true,
             "forceRecaptchaFlowForTesting": false
+          },
+          "ios": {
+            "requestVerificationCodeAutomatically": true
           }
         }
-      ]
+      ],
+      "expo-location"
     ]
   }
 }
