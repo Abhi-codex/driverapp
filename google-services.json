@@ -7,44 +7,7 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:168775587661:android:4ae9239b3da4ca5eda0904",
-        "android_client_info": {
-          "package_name": "com.dhruva12.doctorapp"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "168775587661-ug6m96didbi7gk1eilr39itjs35rfl5r.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.dhruva12.doctorapp",
-            "certificate_hash": "537ba0df9b01e51f4052562f8834ef00771f5c7e"
-          }
-        },
-        {
-          "client_id": "168775587661-vt8296o5mr08flqnuvi3e6j7ksgjg58p.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyCLppyqgw9bblgeb4pB6mBTlB7PRZONESI"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "168775587661-vt8296o5mr08flqnuvi3e6j7ksgjg58p.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:168775587661:android:daf63fe09bbc6105da0904",
+        "mobilesdk_app_id": "1:168775587661:android:204a3d578b6f8779da0904",
         "android_client_info": {
           "package_name": "com.dhruva12.instaaid.driver"
         }
