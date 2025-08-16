@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { styles as s, colors } from '../../constants/tailwindStyles';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialIcons, FontAwesome5, AntDesign } from '@expo/vector-icons';
 import { getServerUrl } from '../../utils/network';
 import { DriverProfile as DriverProfileType, DriverFormData, DriverStats } from '../../types';
 import DriverEditModal from '../../components/DriverEditModal';
@@ -122,6 +122,9 @@ export default function DriverProfile() {
         const response = await profileResponse.json();
         profileData = response.data || response.driver || response;
         setDriverProfile(profileData);
+        
+        // Save profile to AsyncStorage for use in other screens
+        await AsyncStorage.setItem('driver_profile', JSON.stringify(profileData));
         
         // Initialize edit form with current data
         setEditForm({
@@ -303,25 +306,22 @@ export default function DriverProfile() {
     <View style={[s.flex1, s.mt8, s.bgGray50]}>
       <ScrollView style={[s.flex1]} contentContainerStyle={[s.p5]}>
         {/* Profile Header Card */}
-        <View style={[s.bgWhite, s.rounded3xl, s.p6, s.mb5, s.shadow, s.alignCenter]}>
-          <View style={[s.w20, s.h20, s.bgEmergency100, s.roundedFull, s.alignCenter, s.justifyCenter, s.mb4]}>
-            <FontAwesome5 name="ambulance" size={40} color={colors.emergency[600]} />
-          </View>
-          <Text style={[s.text2xl, s.fontBold, s.textGray800, s.textCenter]}>
+        <View style={[s.bgBlack, s.rounded3xl, s.p6, s.mb5, s.shadow, s.alignCenter]}>
+          <Text style={[s.text2xl, s.fontBold, s.textWhite, s.textCenter]}>
             {driverProfile?.name || 'Driver Name'}
           </Text>
           <View style={[s.flexRow, s.alignCenter, s.mt2, s.mb4]}>
-            <MaterialIcons name="star" size={20} color="#fbbf24" />
-            <Text style={[s.textLg, s.fontSemibold, s.textGray700, s.ml1]}>
+            <AntDesign name="star" size={22} color="rgba(252, 214, 214, 1)" />
+            <Text style={[s.textLg, s.fontSemibold, s.textDanger100, s.ml1]}>
               {driverStats?.rating || 0} ({driverStats?.totalRides || 0} rides)
             </Text>
           </View>
           <TouchableOpacity 
-            style={[s.flexRow, s.alignCenter, s.bgPrimary600, s.px4, s.py2, s.roundedFull]}
+            style={[s.flexRow, s.alignCenter, s.bgGray100, s.px4, s.py2, s.roundedFull]}
             onPress={() => setEditModalVisible(true)}
           >
-            <MaterialIcons name="edit" size={18} color="white" />
-            <Text style={[s.textSm, s.fontSemibold, s.textWhite, s.ml1]}>Edit Profile</Text>
+            <MaterialIcons name="edit" size={18} color="black" />
+            <Text style={[s.textSm, s.fontSemibold, s.textBlack, s.ml1]}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
 

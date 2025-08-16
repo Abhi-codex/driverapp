@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Platform, Text, View, TouchableOpacity, StatusBar } from 'react-native';
+import { Platform, Text, View, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import { MaterialIcons, Ionicons, FontAwesome5, Fontisto } from '@expo/vector-icons';
 import { colors, styles } from '../constants/tailwindStyles';
 import { mapStyles } from '../constants/mapStyles';
@@ -8,8 +8,8 @@ import { mapControlThemes, mapTypeOptions } from '../constants/mapThemes';
 let MapView: any;
 let Marker: any;
 let Polyline: any;
+let Location: any;
 let PROVIDER_GOOGLE: any;
-let MAP_TYPES: any = {};
 
 // Only import react-native-maps on native platforms
 if (Platform.OS !== 'web') {
@@ -19,13 +19,11 @@ if (Platform.OS !== 'web') {
     Marker = RNMaps.Marker;
     Polyline = RNMaps.Polyline;
     PROVIDER_GOOGLE = RNMaps.PROVIDER_GOOGLE;
-    MAP_TYPES = {
-      STANDARD: 'standard',
-      HYBRID: 'hybrid',
-      TERRAIN: 'terrain',
-    };
+    
+    // Import Expo Location
+    Location = require('expo-location');
   } catch (error) {
-    console.log('react-native-maps not available:', error);
+    console.log('react-native-maps or expo-location not available:', error);
   }
 }
 
@@ -49,14 +47,12 @@ interface MapViewWrapperProps {
   onRegionChangeComplete?: (region: any) => void;
   onMapReady?: () => void;
   onError?: (error: any) => void;
-  // Enhanced map features
   mapType?: 'standard' | 'hybrid' | 'terrain';
   showsTraffic?: boolean;
-  showsBuildings?: boolean;
   showsIndoors?: boolean;
   showsCompass?: boolean;
+  showsMyLocationButton?: boolean;
   showsScale?: boolean;
-  showsPointsOfInterest?: boolean;
   followsUserLocation?: boolean;
   rotateEnabled?: boolean;
   pitchEnabled?: boolean;
@@ -135,10 +131,6 @@ interface MapControlsProps {
   onMapTypeChange: (type: string) => void;
   showsTraffic: boolean;
   onTrafficToggle: () => void;
-  showsBuildings: boolean;
-  onBuildingsToggle: () => void;
-  showsPointsOfInterest: boolean;
-  onPOIToggle: () => void;
   theme: string;
   onThemeChange: (theme: string) => void;
   isVisible: boolean;
@@ -162,10 +154,6 @@ const MapControls: React.FC<MapControlsProps> = ({
   onMapTypeChange,
   showsTraffic,
   onTrafficToggle,
-  showsBuildings,
-  onBuildingsToggle,
-  showsPointsOfInterest,
-  onPOIToggle,
   theme,
   onThemeChange,
   isVisible,
@@ -278,83 +266,30 @@ const MapControls: React.FC<MapControlsProps> = ({
                   </View>
                 </TouchableOpacity>
               ))}
+              <TouchableOpacity
+                onPress={onTrafficToggle}
+                style={[
+                  styles.p2, styles.mx1, styles.roundedMd, { minWidth: 60 },
+                  showsTraffic 
+                    ? { backgroundColor: currentTheme.buttonActive }
+                    : { backgroundColor: currentTheme.buttonInactive }
+                ]}
+              >
+                <View style={[styles.alignCenter]}>
+                  <MaterialIcons 
+                    name="traffic" 
+                    size={20} 
+                    color={showsTraffic ? currentTheme.buttonActiveText : currentTheme.buttonInactiveText}
+                  />
+                  <Text style={[
+                    styles.textXs, styles.textCenter, styles.mt1,
+                    { color: showsTraffic ? currentTheme.buttonActiveText : currentTheme.buttonInactiveText }
+                  ]}>
+                    Traffic
+                  </Text>
+                </View>
+              </TouchableOpacity>
             </View>
-          </View>
-
-          {/* Feature Controls */}
-          <View style={[
-            styles.roundedLg, styles.shadowLg, styles.p3,
-            { backgroundColor: currentTheme.panelBackground, borderWidth: 1, borderColor: currentTheme.border }
-          ]}>
-            <Text style={[
-              styles.textSm, styles.fontBold, styles.mb3, styles.textCenter,
-              { color: currentTheme.textPrimary }
-            ]}>
-              Features
-            </Text>
-            
-            <TouchableOpacity
-              onPress={onTrafficToggle}
-              style={[
-                styles.flexRow, styles.alignCenter, styles.p2, styles.roundedMd, styles.mb2,
-                { backgroundColor: showsTraffic ? currentTheme.featureActive : currentTheme.featureInactive }
-              ]}
-            >
-              <MaterialIcons 
-                name="traffic" 
-                size={18} 
-                color={showsTraffic ? currentTheme.featureActiveIcon : currentTheme.featureInactiveIcon} 
-                style={styles.mr2}
-              />
-              <Text style={[
-                styles.textSm, styles.fontMedium,
-                { color: showsTraffic ? currentTheme.featureActiveText : currentTheme.featureInactiveText }
-              ]}>
-                Traffic
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={onBuildingsToggle}
-              style={[
-                styles.flexRow, styles.alignCenter, styles.p2, styles.roundedMd, styles.mb2,
-                { backgroundColor: showsBuildings ? currentTheme.featureActive : currentTheme.featureInactive }
-              ]}
-            >
-              <MaterialIcons 
-                name="location-city" 
-                size={18} 
-                color={showsBuildings ? currentTheme.featureActiveIcon : currentTheme.featureInactiveIcon} 
-                style={styles.mr2}
-              />
-              <Text style={[
-                styles.textSm, styles.fontMedium,
-                { color: showsBuildings ? currentTheme.featureActiveText : currentTheme.featureInactiveText }
-              ]}>
-                Buildings
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={onPOIToggle}
-              style={[
-                styles.flexRow, styles.alignCenter, styles.p2, styles.roundedMd,
-                { backgroundColor: showsPointsOfInterest ? currentTheme.featureActive : currentTheme.featureInactive }
-              ]}
-            >
-              <MaterialIcons 
-                name="place" 
-                size={18} 
-                color={showsPointsOfInterest ? currentTheme.featureActiveIcon : currentTheme.featureInactiveIcon} 
-                style={styles.mr2}
-              />
-              <Text style={[
-                styles.textSm, styles.fontMedium,
-                { color: showsPointsOfInterest ? currentTheme.featureActiveText : currentTheme.featureInactiveText }
-              ]}>
-                Points of Interest
-              </Text>
-            </TouchableOpacity>
           </View>
         </>
       )}
@@ -366,11 +301,12 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
   // State for enhanced map features
   const [mapType, setMapType] = useState<'standard' | 'hybrid' | 'terrain'>(props.mapType || 'standard');
   const [showsTraffic, setShowsTraffic] = useState(props.showsTraffic || false);
-  const [showsBuildings, setShowsBuildings] = useState(props.showsBuildings !== false);
-  const [showsPointsOfInterest, setShowsPointsOfInterest] = useState(props.showsPointsOfInterest || false);
   const [theme, setTheme] = useState<'day' | 'night'>(props.theme || 'day');
   const [currentStyle, setCurrentStyle] = useState<any[]>([]);
   const [controlsVisible, setControlsVisible] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(0);
+  const [mapRef, setMapRef] = useState<any>(null);
+  const [isLocating, setIsLocating] = useState(false);
 
   // Set theme styles
   useEffect(() => {
@@ -379,6 +315,8 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
     } else {
       setCurrentStyle(mapStyles.day);
     }
+    // Force re-render by updating key
+    setForceUpdate(prev => prev + 1);
   }, [theme]);
 
   // Handler functions with proper typing
@@ -394,6 +332,87 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
     setControlsVisible(!controlsVisible);
   };
 
+  // Get current theme colors for custom buttons
+  const currentTheme = theme === 'night' ? mapControlThemes.dark : mapControlThemes.light;
+
+  // Handle compass button press
+  const handleCompassPress = () => {
+    if (mapRef) {
+      // Reset map bearing to north (0 degrees) without changing location
+      mapRef.animateCamera({
+        heading: 0, // North
+        pitch: 0,
+        zoom: mapRef._lastKnownZoom || 15,
+      });
+    }
+  };
+
+  // Handle my location button press
+  const handleMyLocationPress = async () => {
+    setIsLocating(true); // Show immediate feedback
+    
+    try {
+      if (Location) {
+        // Request permission
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission denied', 'Location permission is required to show your current location.');
+          setIsLocating(false);
+          return;
+        }
+
+        // Try to get last known location first for speed
+        let location;
+        try {
+          location = await Location.getLastKnownPositionAsync({
+            maxAge: 30000, // Use cached location if less than 30 seconds old
+          });
+        } catch (error) {
+          console.log('No cached location available');
+        }
+
+        // If no cached location or it's too old, get current location with balanced accuracy
+        if (!location) {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced, // Faster than High accuracy
+            timeout: 5000, // 5 second timeout for quick response
+          });
+        }
+
+        if (mapRef && location?.coords) {
+          mapRef.animateToRegion({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }, 500); // Faster animation (500ms instead of 1000ms)
+        }
+      } else if (props.region && mapRef) {
+        // Fallback to animating to the current region
+        mapRef.animateToRegion({
+          latitude: props.region.latitude,
+          longitude: props.region.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 500);
+      }
+    } catch (error) {
+      console.log('Location error:', error);
+      
+      // Quick fallback to current region without showing alert for faster UX
+      if (props.region && mapRef) {
+        mapRef.animateToRegion({
+          latitude: props.region.latitude,
+          longitude: props.region.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 500);
+      }
+    } finally {
+      setIsLocating(false); // Hide loading state
+    }
+  };
+
   if (Platform.OS === 'web' || !MapView) {
     return <WebMapFallback {...props} />;
   }
@@ -401,6 +420,8 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
   return (
     <View style={{ flex: 1, position: 'relative' }}>
       <MapView
+        ref={(ref) => setMapRef(ref)}
+        key={`map-${theme}-${forceUpdate}`}
         provider={PROVIDER_GOOGLE}
         style={[{ flex: 1, height: '100%', width: '100%' }, props.style]}
         region={props.region}
@@ -408,13 +429,11 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
         mapType={mapType as any}
         customMapStyle={currentStyle}
         showsUserLocation={props.showsUserLocation !== false}
-        showsMyLocationButton={props.showsCompass !== false}
-        showsCompass={props.showsCompass !== false}
+        showsMyLocationButton={false}
+        showsCompass={false}
         showsScale={props.showsScale !== false}
-        showsBuildings={showsBuildings}
         showsTraffic={showsTraffic}
         showsIndoors={props.showsIndoors !== false}
-        showsPointsOfInterest={showsPointsOfInterest}
         followsUserLocation={props.followsUserLocation || false}
         zoomEnabled={props.zoomEnabled !== false}
         scrollEnabled={props.scrollEnabled !== false}
@@ -450,10 +469,6 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
           onMapTypeChange={handleMapTypeChange}
           showsTraffic={showsTraffic}
           onTrafficToggle={() => setShowsTraffic(!showsTraffic)}
-          showsBuildings={showsBuildings}
-          onBuildingsToggle={() => setShowsBuildings(!showsBuildings)}
-          showsPointsOfInterest={showsPointsOfInterest}
-          onPOIToggle={() => setShowsPointsOfInterest(!showsPointsOfInterest)}
           theme={theme}
           onThemeChange={handleThemeChange}
           isVisible={controlsVisible}
@@ -461,9 +476,52 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
         />
       )}
 
+      {/* Custom Compass and Location Buttons */}
+      <View style={[styles.absolute, { top: 68, right: 16, zIndex: 30 }]}>
+        {/* Compass Button */}
+        {props.showsCompass !== false && (
+          <TouchableOpacity
+            onPress={handleCompassPress}
+            style={[
+              styles.roundedFull, styles.shadowSm, styles.p2, styles.mb2,
+              { backgroundColor: currentTheme.toggleButton, elevation: 5, borderWidth: 1, borderColor: currentTheme.border }
+            ]}
+          >
+            <MaterialIcons 
+              name="explore" 
+              size={24} 
+              color={currentTheme.textSecondary} 
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* My Location Button */}
+        {props.showsMyLocationButton !== false && (
+          <TouchableOpacity
+            onPress={handleMyLocationPress}
+            style={[
+              styles.roundedFull, styles.shadowSm, styles.p2, styles.mb2,
+              { 
+                backgroundColor: isLocating ? currentTheme.buttonActive : currentTheme.toggleButton, 
+                elevation: 5, 
+                borderWidth: 1, 
+                borderColor: currentTheme.border 
+              }
+            ]}
+            disabled={isLocating}
+          >
+            <MaterialIcons 
+              name={isLocating ? "gps-fixed" : "my-location"} 
+              size={24} 
+              color={isLocating ? currentTheme.buttonActiveText : currentTheme.textSecondary} 
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+
       {/* Enhanced Status Bar for dark themes */}
       {theme === 'night' && (
-        <StatusBar barStyle="light-content" backgroundColor="#09090aff" />
+        <StatusBar barStyle="light-content" backgroundColor="#202024ff" />
       )}
     </View>
   );

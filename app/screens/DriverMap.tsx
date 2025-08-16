@@ -285,9 +285,9 @@ export default function DriverMapScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent/>
       
       {/* Back Button */}
-      <View style={[styles.absolute, { top: 50, left: 20, zIndex: 1000 }]}>
+      <View style={[styles.absolute, { top: 50, left: 18, zIndex: 1000 }]}>
         <TouchableOpacity
-          style={[styles.bgWhite, styles.roundedFull, styles.p3, styles.shadow]}
+          style={[styles.bgWhite, styles.roundedFull, styles.p2, styles.shadow]}
           onPress={() => router.back()}
         >
           <MaterialIcons name="arrow-back" size={24} color={colors.gray[700]} />
