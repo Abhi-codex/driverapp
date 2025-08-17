@@ -113,6 +113,19 @@ function DriverMinimizedInfo({
   return (
     <View style={[styles.px4, styles.py3]}>
       <View style={[styles.flexCol, styles.justifyCenter, styles.alignCenter]}>
+        {/* Available rides header */}
+        <View style={[styles.flexRow, styles.alignCenter, styles.mb2]}>
+          <MaterialCommunityIcons 
+            name="ambulance" 
+            size={18} 
+            color={colors.emergency[600]} 
+            style={[styles.mr2]}
+          />
+          <Text style={[styles.fontBold, styles.textGray900, styles.textBase]}>
+            Emergency Requests
+          </Text>
+        </View>
+
         {/* Available count */}
         {availableRidesCount > 0 ? (
           <View style={[ styles.flexRow, styles.alignCenter, styles.px3, styles.py2, styles.rounded,
@@ -120,17 +133,35 @@ function DriverMinimizedInfo({
             <Text style={[styles.fontBold, styles.textLg, { color: colors.emergency[600] }]}>
               {availableRidesCount}
             </Text>
-            <Text style={[styles.textBase, styles.textGray700, styles.ml1]}>
+            <Text style={[styles.textSm, styles.textGray700, styles.ml1]}>
               emergency call{availableRidesCount !== 1 ? "s" : ""} available
             </Text>
           </View>
         ) : (
-          <View style={[ styles.flexRow, styles.alignCenter, styles.px3, styles.py2, styles.rounded]}>
-            <Text style={[styles.textBase, styles.textGray600]}>
-              No emergency requests available at the moment.
+          <View style={[ styles.flexRow, styles.alignCenter, styles.px3, styles.py2, styles.rounded,
+            { backgroundColor: colors.gray[100] }]}>
+            <Text style={[styles.textSm, styles.textGray600]}>
+              No emergency calls at the moment
             </Text>
           </View>
         )}
+
+        {/* Status indicator */}
+        <View style={[styles.flexRow, styles.alignCenter, styles.mt2]}>
+          <MaterialCommunityIcons 
+            name="circle" 
+            size={8} 
+            color={availableRidesCount > 0 ? colors.emergency[500] : colors.gray[400]} 
+            style={[styles.mr1]}
+          />
+          <Text style={[styles.textXs, styles.textGray600]}>
+            {availableRidesCount > 0 ? "Ready to accept rides" : "Waiting for emergency calls"}
+          </Text>
+        </View>
+
+        <Text style={[styles.textXs, styles.textGray500, styles.mt2]}>
+          Swipe up for more details
+        </Text>
       </View>
     </View>
   );
