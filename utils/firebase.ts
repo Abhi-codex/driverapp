@@ -1,28 +1,9 @@
 import { Alert } from 'react-native';
-import { getAuth, PhoneAuthProvider } from '@react-native-firebase/auth';
-import { getApp } from '@react-native-firebase/app';
+import auth, { PhoneAuthProvider } from '@react-native-firebase/auth';
 import { getServerUrl } from './network';
-
-let authInstance: any;
-try {
-  authInstance = getAuth(getApp());
-} catch (error) {
-  console.log('[Firebase] Error getting auth instance:', error);
-}
+import FirebaseConfirmationStore from './firebaseConfirmationStore';
 
 const DEBUG = __DEV__ === true;
-
-// Configure Firebase Auth settings for production
-if (authInstance && authInstance.settings) {
-  try {
-    // For production builds, we need to allow reCAPTCHA but handle it properly
-    authInstance.settings.appVerificationDisabledForTesting = false;
-    // Set a timeout for verification
-    authInstance.settings.forceRecaptchaFlowForTesting = false;
-  } catch (error) {
-    console.log('[Firebase] Could not configure app verification settings:', error);
-  }
-}
 
 export interface FirebaseUser {
   uid: string;
@@ -42,54 +23,82 @@ export interface AuthResult {
 export class FirebasePhoneAuth {
   static async sendOTP(phoneNumber: string): Promise<{ success: boolean; verificationId?: string; message?: string }> {
     try {
-      if (DEBUG) console.log('[OTP] start verifyPhoneNumber', phoneNumber);
+      if (DEBUG) console.log('[OTP] start signInWithPhoneNumber', phoneNumber);
       
-      // The second parameter (true) forces a reCAPTCHA verification if the
-      // automatic verification fails. This is crucial for production builds
-      // where Play Integrity might not be configured perfectly.
-      const verificationId = await authInstance.verifyPhoneNumber(phoneNumber, true);
-
-      if (DEBUG) console.log('[OTP] verificationId obtained:', verificationId);
-      return { success: true, verificationId: verificationId };
-
+      // Use the correct React Native Firebase method
+      const confirmation = await auth().signInWithPhoneNumber(phoneNumber);
+      
+      if (DEBUG) console.log('[OTP] confirmation obtained', { verificationId: confirmation.verificationId });
+      
+      // Store the confirmation object for later use
+      FirebaseConfirmationStore.store(confirmation.verificationId, confirmation);
+      
+      return { 
+        success: true, 
+        verificationId: confirmation.verificationId
+      };
     } catch (error: any) {
-      if (DEBUG) console.error('[OTP] verifyPhoneNumber error', error);
-      
-      // Provide a more specific error message for this common issue.
-      if (error.code === 'auth/missing-client-identifier') {
-        Alert.alert(
-          'Authentication Error',
-          'Could not verify your phone number. Please ensure you have the latest version of the app and that Google Play Services is up to date.'
-        );
-        return { success: false, message: 'Request is missing a valid app identifier. Check SHA-1 and Play Integrity settings.' };
-      }
-      
-      return { success: false, message: error.message || 'Failed to send OTP' };
+      if (DEBUG) console.error('[OTP] signInWithPhoneNumber error', error);
+      let errorMessage = 'Failed to start verification.';
+      if (error.code === 'auth/too-many-requests') errorMessage = 'Too many requests. Try later.';
+      if (error.code === 'auth/invalid-phone-number') errorMessage = 'Invalid phone number.';
+      if (error.code === 'auth/invalid-recaptcha-token') errorMessage = 'ReCAPTCHA verification failed. Please try again.';
+      if (error.code === 'auth/web-context-cancelled') errorMessage = 'Verification cancelled. Please try again.';
+      if (error.code === 'auth/network-request-failed') errorMessage = 'Network error. Please check your connection.';
+      Alert.alert('Error', errorMessage);
+      return { success: false, message: errorMessage };
     }
   }
 
   static async verifyOTPWithVerificationId(verificationId: string, code: string): Promise<{ success: boolean; idToken?: string; message?: string }> {
     try {
-      const credential = PhoneAuthProvider.credential(verificationId, code);
-      const userCred = await authInstance.signInWithCredential(credential);
+      if (DEBUG) console.log('[OTP] verifying with verificationId:', verificationId);
       
-      // Get a fresh ID token immediately after verification
-      const idToken = await userCred.user.getIdToken(true); // Force refresh to get fresh token
-      if (DEBUG) console.log('[OTP] Got fresh ID token after verification');
+      // Try to get the stored confirmation object first (preferred method)
+      const confirmation = FirebaseConfirmationStore.get(verificationId);
       
-      return { success: true, idToken };
+      if (confirmation && typeof confirmation.confirm === 'function') {
+        if (DEBUG) console.log('[OTP] using stored confirmation object');
+        const userCred = await confirmation.confirm(code);
+        
+        // Clean up stored confirmation
+        FirebaseConfirmationStore.remove(verificationId);
+        
+        // Get a fresh ID token immediately after verification
+        const idToken = await userCred.user.getIdToken(true);
+        if (DEBUG) console.log('[OTP] Got fresh ID token after verification');
+        
+        return { success: true, idToken };
+      } else {
+        // Fallback to credential method if confirmation object not available
+        if (DEBUG) console.log('[OTP] using credential fallback method');
+        const credential = PhoneAuthProvider.credential(verificationId, code);
+        const userCred = await auth().signInWithCredential(credential);
+        
+        // Get a fresh ID token immediately after verification
+        const idToken = await userCred.user.getIdToken(true);
+        if (DEBUG) console.log('[OTP] Got fresh ID token after verification (fallback)');
+        
+        return { success: true, idToken };
+      }
     } catch (error: any) {
-      if (DEBUG) console.warn('[OTP] manual code verification error', error);
+      if (DEBUG) console.warn('[OTP] code verification error', error);
+      
+      // Clean up stored confirmation on error
+      FirebaseConfirmationStore.remove(verificationId);
+      
       let errorMessage = 'Invalid code. Please try again.';
       if (error.code === 'auth/invalid-verification-code') errorMessage = 'Incorrect code.';
       if (error.code === 'auth/code-expired') errorMessage = 'Code expired. Request a new one.';
+      if (error.code === 'auth/invalid-verification-id') errorMessage = 'Invalid verification session. Please try again.';
+      if (error.code === 'auth/session-expired') errorMessage = 'Session expired. Please request a new code.';
       return { success: false, message: errorMessage };
     }
   }
 
   static async getFreshIdToken(): Promise<string | null> {
     try {
-      const currentUser = authInstance.currentUser;
+      const currentUser = auth().currentUser;
       if (currentUser) {
         const freshToken = await currentUser.getIdToken(true); // Force refresh
         if (DEBUG) console.log('[AUTH] Fresh ID token obtained');
@@ -156,7 +165,7 @@ export class FirebasePhoneAuth {
   }
 
   static getCurrentUser(): FirebaseUser | null {
-    const user = authInstance.currentUser;
+    const user = auth().currentUser;
     if (user) {
       return { uid: user.uid, phoneNumber: user.phoneNumber, email: user.email, displayName: user.displayName };
     }
@@ -165,8 +174,10 @@ export class FirebasePhoneAuth {
 
   static async signOut(): Promise<void> {
     try {
-      await authInstance.signOut();
-      if (DEBUG) console.log('[AUTH] signed out');
+      await auth().signOut();
+      // Clear any stored confirmations
+      FirebaseConfirmationStore.clear();
+      if (DEBUG) console.log('[AUTH] signed out and cleared confirmations');
     } catch (error) {
       if (DEBUG) console.warn('[AUTH] sign out error', error);
     }

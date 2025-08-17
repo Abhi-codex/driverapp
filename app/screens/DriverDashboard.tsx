@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { styles as s, colors } from '../../constants/tailwindStyles';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRiderLogic } from '../../hooks/useRiderLogic';
@@ -19,7 +19,6 @@ export default function DriverDashboard() {
     online, 
     toggleOnline, 
     availableRides, 
-    driverStats,
     fetchDriverStats 
   } = useRiderLogic();
 
@@ -30,9 +29,27 @@ export default function DriverDashboard() {
   // Refresh driver profile when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      loadDriverProfile();
-    }, [])
+      // Only reload if profile hasn't been loaded yet
+      if (!profileLoaded) {
+        loadDriverProfile();
+      } else {
+        // If already loaded, just refresh from AsyncStorage (fast)
+        refreshProfileFromStorage();
+      }
+    }, [profileLoaded])
   );
+
+  const refreshProfileFromStorage = async () => {
+    try {
+      const storedProfile = await AsyncStorage.getItem('driver_profile');
+      if (storedProfile) {
+        const profile = JSON.parse(storedProfile);
+        setDriverName(profile.name || 'Driver');
+      }
+    } catch (error) {
+      console.log('Failed to refresh profile from storage:', error);
+    }
+  };
 
   // Fetch stats when component mounts or when online status changes
   useEffect(() => {
@@ -65,28 +82,65 @@ export default function DriverDashboard() {
         return;
       }
 
-      // Try to get driver name from stored profile or use default
+      // Try to get driver name from stored profile or fetch from server
+      await loadDriverProfile();
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      router.replace('/screens/DriverAuth');
+    }
+  };
+
+  const loadDriverProfile = async () => {
+    try {
+      // First try to get from AsyncStorage
       const storedProfile = await AsyncStorage.getItem('driver_profile');
       if (storedProfile) {
         const profile = JSON.parse(storedProfile);
+        console.log('Loaded profile from storage:', profile);
         setDriverName(profile.name || 'Driver');
+        setProfileLoaded(true);
         return;
       }
 
-      // If not in storage, try to fetch from server
+      // If not in storage, try to fetch from server with timeout and retry logic
       console.log('No profile in storage, fetching from server...');
+      await fetchProfileFromServer();
+    } catch (error) {
+      console.error('Failed to load driver profile:', error);
+      setDriverName('Driver'); // Fallback
+      setProfileLoaded(true);
+    }
+  };
+
+  const fetchProfileFromServer = async (retryCount = 0) => {
+    const maxRetries = 2;
+    
+    try {
       const token = await AsyncStorage.getItem('access_token');
       const firebaseToken = await AsyncStorage.getItem('firebase_id_token');
       
-      if (firebaseToken || token) {
-        const { getServerUrl } = await import('../../utils/network');
-        
+      if (!firebaseToken && !token) {
+        setDriverName('Driver');
+        setProfileLoaded(true);
+        return;
+      }
+
+      const { getServerUrl } = await import('../../utils/network');
+      
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      try {
         let profileResponse = await fetch(`${getServerUrl()}/driver/profile`, {
           headers: { 
             'Authorization': `Bearer ${firebaseToken || token}`,
             'Content-Type': 'application/json'
-          }
+          },
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         if (profileResponse.ok) {
           const response = await profileResponse.json();
@@ -96,14 +150,35 @@ export default function DriverDashboard() {
           // Save to AsyncStorage for future use
           await AsyncStorage.setItem('driver_profile', JSON.stringify(profileData));
           setDriverName(profileData.name || 'Driver');
+          setProfileLoaded(true);
         } else {
-          console.log('Failed to fetch profile from server:', profileResponse.status);
-          setDriverName('Driver'); // Fallback
+          throw new Error(`Server responded with status: ${profileResponse.status}`);
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          console.log('Request timed out');
+        } else {
+          console.log('Fetch error:', fetchError.message);
+        }
+        
+        // Retry logic for server wake-up
+        if (retryCount < maxRetries) {
+          console.log(`Retrying in ${(retryCount + 1) * 2} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+          setTimeout(() => {
+            fetchProfileFromServer(retryCount + 1);
+          }, (retryCount + 1) * 2000); // 2s, 4s delays
+        } else {
+          console.log('Max retries reached, using fallback');
+          setDriverName('Driver');
+          setProfileLoaded(true);
         }
       }
     } catch (error) {
-      console.error('Failed to load driver profile:', error);
-      setDriverName('Driver'); // Fallback
+      console.error('Error in fetchProfileFromServer:', error);
+      setDriverName('Driver');
+      setProfileLoaded(true);
     }
   };
 

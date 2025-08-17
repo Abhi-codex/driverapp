@@ -71,7 +71,7 @@ export default {
         {
           "android": {
             "requestVerificationCodeAutomatically": true,
-            "forceRecaptchaFlowForTesting": false
+            "forceRecaptchaFlowForTesting": __DEV__ ? true : false
           },
           "ios": {
             "requestVerificationCodeAutomatically": true
