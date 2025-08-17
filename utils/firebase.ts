@@ -3,17 +3,26 @@ import { getAuth, PhoneAuthProvider } from '@react-native-firebase/auth';
 import { getApp } from '@react-native-firebase/app';
 import { getServerUrl } from './network';
 
-const authInstance = getAuth(getApp());
+let authInstance: any;
+try {
+  authInstance = getAuth(getApp());
+} catch (error) {
+  console.log('[Firebase] Error getting auth instance:', error);
+}
+
 const DEBUG = __DEV__ === true;
 
-// // Disable reCAPTCHA for phone auth to prevent browser redirects
-// if (authInstance && authInstance.settings) {
-//   try {
-//     authInstance.settings.appVerificationDisabledForTesting = false;
-//   } catch (error) {
-//     console.log('[Firebase] Could not configure app verification settings');
-//   }
-// }
+// Configure Firebase Auth settings for production
+if (authInstance && authInstance.settings) {
+  try {
+    // For production builds, we need to allow reCAPTCHA but handle it properly
+    authInstance.settings.appVerificationDisabledForTesting = false;
+    // Set a timeout for verification
+    authInstance.settings.forceRecaptchaFlowForTesting = false;
+  } catch (error) {
+    console.log('[Firebase] Could not configure app verification settings:', error);
+  }
+}
 
 export interface FirebaseUser {
   uid: string;
@@ -34,25 +43,28 @@ export class FirebasePhoneAuth {
   static async sendOTP(phoneNumber: string): Promise<{ success: boolean; verificationId?: string; message?: string }> {
     try {
       if (DEBUG) console.log('[OTP] start verifyPhoneNumber', phoneNumber);
-      const listener: any = (authInstance as any).verifyPhoneNumber(phoneNumber);
-      return await new Promise(resolve => {
-        listener.on('state_changed', (snapshot: any) => {
-          if (snapshot.state === 'sent' || snapshot.state === 'verified') {
-            if (DEBUG) console.log('[OTP] verificationId obtained');
-            resolve({ success: true, verificationId: snapshot.verificationId });
-          } else if (snapshot.state === 'error') {
-            if (DEBUG) console.warn('[OTP] error snapshot', snapshot);
-            resolve({ success: false, message: snapshot.error?.message || 'Verification failed' });
-          }
-        });
-      });
+      
+      // The second parameter (true) forces a reCAPTCHA verification if the
+      // automatic verification fails. This is crucial for production builds
+      // where Play Integrity might not be configured perfectly.
+      const verificationId = await authInstance.verifyPhoneNumber(phoneNumber, true);
+
+      if (DEBUG) console.log('[OTP] verificationId obtained:', verificationId);
+      return { success: true, verificationId: verificationId };
+
     } catch (error: any) {
       if (DEBUG) console.error('[OTP] verifyPhoneNumber error', error);
-      let errorMessage = 'Failed to start verification.';
-      if (error.code === 'auth/too-many-requests') errorMessage = 'Too many requests. Try later.';
-      if (error.code === 'auth/invalid-phone-number') errorMessage = 'Invalid phone number.';
-      Alert.alert('Error', errorMessage);
-      return { success: false, message: errorMessage };
+      
+      // Provide a more specific error message for this common issue.
+      if (error.code === 'auth/missing-client-identifier') {
+        Alert.alert(
+          'Authentication Error',
+          'Could not verify your phone number. Please ensure you have the latest version of the app and that Google Play Services is up to date.'
+        );
+        return { success: false, message: 'Request is missing a valid app identifier. Check SHA-1 and Play Integrity settings.' };
+      }
+      
+      return { success: false, message: error.message || 'Failed to send OTP' };
     }
   }
 

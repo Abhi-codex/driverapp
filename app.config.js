@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 export default {
   expo: {
-    name: "driverapp",
+    name: "InstaAid Driver",
     slug: "driverapp",
     version: "1.0.0",
     orientation: "portrait",
