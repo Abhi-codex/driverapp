@@ -13,8 +13,7 @@ export default function DriverDashboard() {
   const [driverName, setDriverName] = useState('Driver');
   const [showMenu, setShowMenu] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
-  
-  // Use rider logic for online status management and stats
+
   const { 
     online, 
     toggleOnline, 
