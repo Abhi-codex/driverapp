@@ -175,7 +175,6 @@ export class FirebasePhoneAuth {
   static async signOut(): Promise<void> {
     try {
       await auth().signOut();
-      // Clear any stored confirmations
       FirebaseConfirmationStore.clear();
       if (DEBUG) console.log('[AUTH] signed out and cleared confirmations');
     } catch (error) {
