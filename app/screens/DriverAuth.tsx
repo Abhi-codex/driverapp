@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { colors, styles } from "../../constants/tailwindStyles";
 import LabelInput from "../../components/LabelInput";
-import { FirebasePhoneAuth } from "../../utils/firebase";
+import { BackendOTPAuth } from "../../utils/backendOTPAuth";
 
 export default function DriverAuthScreen() {
   const router = useRouter();
@@ -35,21 +35,31 @@ export default function DriverAuthScreen() {
     setLoading(true);
 
     try {
-      const formattedPhone = FirebasePhoneAuth.formatPhoneNumber(phoneNumber, '+91');
+      const formattedPhone = BackendOTPAuth.formatPhoneNumber(phoneNumber, '+91');
       console.log('[DRIVER AUTH] Sending OTP to:', formattedPhone);
       
-      // Send OTP via Firebase (this works for both new and existing users)
-      const result = await FirebasePhoneAuth.sendOTP(formattedPhone);
+      // Send OTP via Backend
+      const result = await BackendOTPAuth.sendOTP(formattedPhone, 'driver');
       
-      if (result.success && result.verificationId) {
+      if (result.success) {
         console.log('[DRIVER AUTH] OTP sent successfully');
+        
+        // Show the OTP in development for testing
+        if (result.otp && __DEV__) {
+          Alert.alert(
+            "Development Mode", 
+            `OTP sent successfully!\n\nFor testing: ${result.otp}`,
+            [{ text: "OK" }]
+          );
+        } else {
+          Alert.alert("Success", "OTP sent to your phone number");
+        }
+        
         router.push({
           pathname: '/screens/OtpScreen',
           params: {
             phone: formattedPhone,
-            isFirebaseAuth: 'true',
-            verificationId: result.verificationId,
-            isSignup: 'auto', // Auto-detect if user is new or existing
+            isFirebaseAuth: 'false', // Using backend OTP now
             role: 'driver'
           }
         });

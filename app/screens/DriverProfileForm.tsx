@@ -51,7 +51,8 @@ export default function DriverProfileForm() {
   }, []);
 
   const checkAuthentication = async () => {
-    const token = await AsyncStorage.getItem('access_token');
+    // Try new token format first, then fall back to legacy
+    let token = await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('access_token');
     const role = await AsyncStorage.getItem('role');
     
     if (!token || role !== 'driver') {
@@ -148,27 +149,16 @@ export default function DriverProfileForm() {
     setLoading(true);
 
     try {
-      let token = await AsyncStorage.getItem('access_token');
-      let firebaseToken = await AsyncStorage.getItem('firebase_id_token');
+      // Try new token format first, then fall back to legacy
+      let token = await AsyncStorage.getItem('accessToken') || await AsyncStorage.getItem('access_token');
       
-      if (!token && !firebaseToken) {
+      if (!token) {
         Alert.alert('Error', 'Authentication token not found. Please login again.');
         router.replace('/screens/DriverAuth');
         return;
       }
 
-      // Try to get a fresh Firebase token to avoid expiration issues
-      try {
-        const { FirebasePhoneAuth } = await import('../../utils/firebase');
-        const freshToken = await FirebasePhoneAuth.getFreshIdToken();
-        if (freshToken) {
-          firebaseToken = freshToken;
-          await AsyncStorage.setItem('firebase_id_token', freshToken);
-          console.log('[PROFILE FORM] Using fresh Firebase token');
-        }
-      } catch (tokenError) {
-        console.warn('[PROFILE FORM] Could not get fresh token:', tokenError);
-      }
+      console.log('[PROFILE FORM] Using backend authentication token');
 
       const profileData = {
         name: formData.name.trim(),
@@ -200,28 +190,14 @@ export default function DriverProfileForm() {
 
       console.log('Submitting profile data:', profileData);
 
-      // Try with Firebase token first, then access token as fallback
-      let response = await fetch(`${getServerUrl()}/driver/profile`, {
+      const response = await fetch(`${getServerUrl()}/driver/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${firebaseToken || token}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(profileData),
       });
-
-      // If 401/500 with Firebase token, try with access token
-      if ((response.status === 401 || response.status === 500) && firebaseToken && token && firebaseToken !== token) {
-        console.log('[PROFILE FORM] Firebase token failed, trying access token...');
-        response = await fetch(`${getServerUrl()}/driver/profile`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(profileData),
-        });
-      }
 
       let data;
       let isJson = false;

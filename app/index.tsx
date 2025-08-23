@@ -25,18 +25,16 @@ export default function Page() {
         return;
       }
       
-      const [accessToken, role, profileComplete, firebaseToken] = await Promise.all([
-        AsyncStorage.getItem('access_token'),
+      const [accessToken, role, profileComplete] = await Promise.all([
+        AsyncStorage.getItem('accessToken'),
         AsyncStorage.getItem('role'),
-        AsyncStorage.getItem('profile_complete'),
-        AsyncStorage.getItem('firebase_id_token')
+        AsyncStorage.getItem('profile_complete')
       ]);
 
       console.log('[INDEX] Auth check:', { 
         hasAccessToken: !!accessToken, 
         role, 
-        profileComplete,
-        hasFirebaseToken: !!firebaseToken 
+        profileComplete
       });
 
       // Give a moment for splash screen

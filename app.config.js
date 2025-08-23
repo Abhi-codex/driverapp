@@ -25,7 +25,6 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.dhruva12.instaaid.driver",
-      googleServicesFile: "./GoogleService-Info.plist",
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
       },
@@ -36,7 +35,6 @@ export default {
     },
     android: {
       package: "com.dhruva12.instaaid.driver",
-      googleServicesFile: "./google-services.json",
       edgeToEdgeEnabled: true,
       permissions: [
         "android.permission.RECEIVE_SMS",
@@ -65,19 +63,6 @@ export default {
       favicon: "./assets/images/logo.png"
     },
     plugins: [
-      "@react-native-firebase/app",
-      [
-        "@react-native-firebase/auth",
-        {
-          "android": {
-            "requestVerificationCodeAutomatically": true,
-            "forceRecaptchaFlowForTesting": __DEV__ ? true : false
-          },
-          "ios": {
-            "requestVerificationCodeAutomatically": true
-          }
-        }
-      ],
       "expo-location"
     ],
     experiments: {

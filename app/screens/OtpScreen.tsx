@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, Image } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Image, Alert } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { StackNavigationProp } from "@react-navigation/stack";
 import { styles as s } from "../../constants/tailwindStyles";
-import { verifyOtpFlow, resendOtpHelper } from "../../utils/otpManager";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { BackendOTPAuth } from "../../utils/backendOTPAuth";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DEBUG = __DEV__ === true;
 const LoginImage = require("../../assets/images/login.png");
@@ -17,23 +18,20 @@ const OtpScreen: React.FC = () => {
   const { 
     phone, 
     isFirebaseAuth = 'false', 
-    verificationId 
+    role = 'driver'
   } = params as {
     phone: string;
     isFirebaseAuth?: string;
-    verificationId?: string;
+    role?: string;
   };
 
-  const isFirebaseAuthEnabled = isFirebaseAuth === 'true';
+  const isBackendAuth = isFirebaseAuth === 'false';
 
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number>(60);
   const [canResend, setCanResend] = useState<boolean>(false);
-  const [currentVerificationId, setCurrentVerificationId] = useState<
-    string | undefined
-  >(verificationId);
   const [lastAttemptedCode, setLastAttemptedCode] = useState<string>("");
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
@@ -41,8 +39,8 @@ const OtpScreen: React.FC = () => {
     if (DEBUG) {
       console.log("[OTP SCREEN] Received params:", {
         phone,
-        isFirebaseAuth: isFirebaseAuthEnabled,
-        verificationId,
+        isBackendAuth,
+        role,
       });
     }
     
@@ -56,25 +54,45 @@ const OtpScreen: React.FC = () => {
 
   // Countdown timer for resend
   useEffect(() => {
-    if (!isFirebaseAuthEnabled) return;
     if (secondsLeft <= 0) {
       setCanResend(true);
       return;
     }
     const t = setTimeout(() => setSecondsLeft((prev) => prev - 1), 1000);
     return () => clearTimeout(t);
-  }, [secondsLeft, isFirebaseAuthEnabled]);
+  }, [secondsLeft]);
 
-  const resendOtp = async () =>
-    resendOtpHelper({
-      phone,
-      loading,
-      canResend,
-      setError,
-      setCanResend,
-      setSecondsLeft,
-      setCurrentVerificationId,
-    });
+  const resendOtp = async () => {
+    if (!canResend || loading) return;
+    
+    setError(null);
+    setCanResend(false);
+    setSecondsLeft(60);
+    setLoading(true);
+    
+    try {
+      const result = await BackendOTPAuth.sendOTP(phone, role as 'driver' | 'patient' | 'doctor');
+      
+      if (result.success) {
+        // Show the OTP in development for testing
+        if (result.otp && __DEV__) {
+          Alert.alert(
+            "Development Mode", 
+            `New OTP sent!\n\nFor testing: ${result.otp}`,
+            [{ text: "OK" }]
+          );
+        } else {
+          Alert.alert("Success", "New OTP sent to your phone");
+        }
+      } else {
+        setError(result.message || 'Failed to resend OTP');
+      }
+    } catch (error: any) {
+      setError('Failed to resend OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleOtpChange = (raw: string, index: number) => {
     if (error) setError(null);
@@ -86,7 +104,7 @@ const OtpScreen: React.FC = () => {
       const nd = [...otpDigits];
       chars.forEach((c, i) => { nd[index + i] = c; });
       setOtpDigits(nd);
-      console.log('[DRIVER OTP] Multi-paste OTP digits:', nd);
+      console.log('[BACKEND OTP] Multi-paste OTP digits:', nd);
       const next = Math.min(index + chars.length, 5);
       if (next <= 5) inputRefs.current[next]?.focus();
       return;
@@ -96,7 +114,7 @@ const OtpScreen: React.FC = () => {
       const nd = [...otpDigits];
       nd[index] = cleaned;
       setOtpDigits(nd);
-      console.log('[DRIVER OTP] Single digit OTP digits:', nd);
+      console.log('[BACKEND OTP] Single digit OTP digits:', nd);
       if (index < 5) inputRefs.current[index + 1]?.focus();
       return;
     }
@@ -112,35 +130,53 @@ const OtpScreen: React.FC = () => {
     }
   };
 
-  // Create a navigation adapter for the OTP manager
-  const navigationAdapter = {
-    reset: ({ index, routes }: { index: number; routes: { name: string }[] }) => {
-      const routeName = routes[0]?.name;
-      if (routeName === 'MainTabs') {
-        router.replace('/navigation/MainTabs');
+  const verifyOtp = async () => {
+    const otp = otpDigits.join('');
+    if (otp.length !== 6) return;
+    if (otp === lastAttemptedCode) return; // prevent duplicate attempts
+    
+    setLastAttemptedCode(otp);
+    setLoading(true);
+    setError(null);
+    
+    try {
+      console.log('[BACKEND OTP] Verifying OTP:', otp);
+      
+      const result = await BackendOTPAuth.verifyOTP(phone, otp);
+      
+      if (result.success && result.tokens && result.user) {
+        console.log('[BACKEND OTP] Verification successful');
+        
+        // Store tokens securely
+        await AsyncStorage.setItem('accessToken', result.tokens.accessToken);
+        await AsyncStorage.setItem('refreshToken', result.tokens.refreshToken);
+        await AsyncStorage.setItem('role', result.user.role);
+        
+        // Check if profile is complete
+        const profileComplete = result.user.profileCompleted || false;
+        await AsyncStorage.setItem('profile_complete', profileComplete.toString());
+        
+        console.log('[BACKEND OTP] Profile complete:', profileComplete);
+        
+        // Small delay for UI feedback
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Navigate based on profile completion
+        if (profileComplete) {
+          router.replace('/navigation/MainTabs');
+        } else {
+          router.replace('/screens/DriverProfileForm');
+        }
+      } else {
+        setError(result.message || 'Invalid OTP. Please try again.');
       }
-    },
-    replace: (routeName: string, params?: any) => {
-      if (routeName === 'ProfileForm') {
-        router.replace('/screens/DriverProfileForm');
-      } else if (routeName === 'MainTabs') {
-        router.replace('/navigation/MainTabs');
-      }
+    } catch (error: any) {
+      console.error('[BACKEND OTP] Verification error:', error);
+      setError('Verification failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
-
-  const verifyOtp = async () =>
-    verifyOtpFlow({
-      otpDigits,
-      lastAttemptedCode,
-      setLastAttemptedCode,
-      isFirebaseAuth: isFirebaseAuthEnabled,
-      currentVerificationId,
-      phone,
-      setLoading,
-      setError,
-      navigation: navigationAdapter as any,
-    });
 
   const handleOtpKeyPress = (index: number, key: string) => {
     if (key === 'Backspace' && otpDigits[index] === '' && index > 0) {
@@ -199,13 +235,11 @@ const OtpScreen: React.FC = () => {
       )}
 
       <View style={[s.mb4]}>
-        {isFirebaseAuthEnabled && (
-          <Text style={[s.textSm, s.textCenter, s.textGray500]}>
-            {canResend
-              ? "You can request a new code."
-              : `Resend code in ${secondsLeft}s`}
-          </Text>
-        )}
+        <Text style={[s.textSm, s.textCenter, s.textGray500]}>
+          {canResend
+            ? "You can request a new code."
+            : `Resend code in ${secondsLeft}s`}
+        </Text>
       </View>
 
       <TouchableOpacity 
@@ -218,17 +252,15 @@ const OtpScreen: React.FC = () => {
         </Text>
       </TouchableOpacity>
 
-      {isFirebaseAuthEnabled && (
-        <TouchableOpacity
-          onPress={resendOtp}
-          disabled={!canResend || loading}
-          style={[s.py2, s.mb2, !canResend ? s.opacity50 : null]}
-        >
-          <Text style={[s.textCenter, canResend ? s.textPrimary600 : s.textGray400, s.fontSemibold]}>
-            Resend Code
-          </Text>
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity
+        onPress={resendOtp}
+        disabled={!canResend || loading}
+        style={[s.py2, s.mb2, !canResend ? s.opacity50 : null]}
+      >
+        <Text style={[s.textCenter, canResend ? s.textPrimary600 : s.textGray400, s.fontSemibold]}>
+          Resend Code
+        </Text>
+      </TouchableOpacity>
 
       <TouchableOpacity onPress={() => navigation.goBack()} style={[s.py2]}>
         <Text style={[s.textPrimary600, s.textCenter]}>
