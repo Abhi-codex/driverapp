@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, Image, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Image, Alert, BackHandler } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { StackNavigationProp } from "@react-navigation/stack";
 import { styles as s } from "../../constants/tailwindStyles";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { BackendOTPAuth } from "../../utils/backendOTPAuth";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -35,6 +35,23 @@ const OtpScreen: React.FC = () => {
   const [canResend, setCanResend] = useState<boolean>(false);
   const [lastAttemptedCode, setLastAttemptedCode] = useState<string>("");
   const inputRefs = useRef<(TextInput | null)[]>([]);
+
+  // Prevent back navigation during OTP verification
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        // Only allow back if user can resend (meaning they can change phone number)
+        if (canResend) {
+          return false; // Allow default back behavior
+        }
+        // Prevent back navigation during OTP process
+        return true; // Prevent back
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [canResend])
+  );
 
   useEffect(() => {
     if (DEBUG) {
@@ -282,11 +299,13 @@ const OtpScreen: React.FC = () => {
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.goBack()} style={[s.py2]}>
-        <Text style={[s.textPrimary600, s.textCenter]}>
-          Change Phone Number
-        </Text>
-      </TouchableOpacity>
+      {canResend && (
+        <TouchableOpacity onPress={() => navigation.goBack()} style={[s.py2]}>
+          <Text style={[s.textPrimary600, s.textCenter]}>
+            Change Phone Number
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };

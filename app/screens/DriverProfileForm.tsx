@@ -2,15 +2,12 @@ import DropdownField from '../../components/DropdownField';
 import InputField from '../../components/InputField';
 import { FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View, BackHandler } from 'react-native';
 import { colors, styles } from '../../constants/tailwindStyles';
 import { getServerUrl } from '../../utils/network';
 import { DriverFormData, HospitalAffiliation } from '../../types';
-
-type VehicleType = 'bls' | 'als' | 'ccs' | 'auto' | 'bike';
-type CertificationLevel = 'EMT-Basic' | 'EMT-Intermediate' | 'EMT-Paramedic' | 'Critical Care';
 
 export default function DriverProfileForm() {
   const router = useRouter();
@@ -49,6 +46,30 @@ export default function DriverProfileForm() {
     // Check if user is authenticated
     checkAuthentication();
   }, []);
+
+  // Prevent back navigation with warning about progress loss
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        Alert.alert(
+          'Discard Progress?',
+          'Your profile information will be lost if you go back. Are you sure?',
+          [
+            { text: 'Continue Editing', style: 'cancel' },
+            { 
+              text: 'Discard', 
+              style: 'destructive',
+              onPress: () => router.back()
+            }
+          ]
+        );
+        return true; // Prevent default back behavior
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [router])
+  );
 
   const checkAuthentication = async () => {
     // Try new token format first, then fall back to legacy

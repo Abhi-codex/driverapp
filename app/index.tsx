@@ -26,7 +26,7 @@ export default function Page() {
       }
       
       const [accessToken, role, profileComplete] = await Promise.all([
-        AsyncStorage.getItem('accessToken'),
+        AsyncStorage.getItem('access_token'),
         AsyncStorage.getItem('role'),
         AsyncStorage.getItem('profile_complete')
       ]);

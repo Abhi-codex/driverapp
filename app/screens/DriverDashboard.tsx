@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StatusBar, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StatusBar, Alert, BackHandler } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { styles as s, colors } from '../../constants/tailwindStyles';
@@ -24,6 +24,20 @@ export default function DriverDashboard() {
   useEffect(() => {
     checkAuth();
   }, []);
+
+  // Handle back button - close app instead of navigating back to auth
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        BackHandler.exitApp();
+        return true; // Prevent default behavior
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      return () => backHandler.remove();
+    }, [])
+  );
 
   // Refresh driver profile when screen comes into focus
   useFocusEffect(

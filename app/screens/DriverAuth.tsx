@@ -1,7 +1,8 @@
 import { FontAwesome5 } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, styles } from "../../constants/tailwindStyles";
 import LabelInput from "../../components/LabelInput";
 import { BackendOTPAuth } from "../../utils/backendOTPAuth";
@@ -10,6 +11,26 @@ export default function DriverAuthScreen() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Check if user is already authenticated when component mounts
+  useEffect(() => {
+    checkExistingAuth();
+  }, []);
+
+  const checkExistingAuth = async () => {
+    try {
+      const token = await AsyncStorage.getItem('access_token');
+      const role = await AsyncStorage.getItem('role');
+      
+      if (token && role === 'driver') {
+        console.log('[DRIVER AUTH] User already authenticated, redirecting to dashboard');
+        router.replace('/screens/DriverDashboard');
+      }
+    } catch (error) {
+      console.error('[DRIVER AUTH] Error checking existing auth:', error);
+      // Continue to auth screen if there's an error
+    }
+  };
 
   const handlePhoneChange = (value: string) => {
     // Only allow digits and limit to 10 characters
