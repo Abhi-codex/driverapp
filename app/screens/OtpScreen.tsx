@@ -93,10 +93,11 @@ const OtpScreen: React.FC = () => {
       if (result.success) {
         if (result.otp) {
           setBackendOtp(result.otp);
+          Alert.alert("Success", `OTP sent!\n${result.otp}`);
         } else {
           setBackendOtp(null);
+          Alert.alert("Success", "New OTP sent to your phone");
         }
-        Alert.alert("Success", result.otp ? `OTP sent!\n ${result.otp}` : "New OTP sent to your phone");
       } else {
         setError(result.message || 'Failed to resend OTP');
       }
