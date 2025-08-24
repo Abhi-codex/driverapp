@@ -11,13 +11,14 @@ const DEBUG = __DEV__ === true;
 const LoginImage = require("../../assets/images/login.png");
 
 const OtpScreen: React.FC = () => {
+  // Store the last OTP received from backend for display
+  const [backendOtp, setBackendOtp] = useState<string | null>(null);
   const navigation = useNavigation<StackNavigationProp<any>>();
   const router = useRouter();
   const params = useLocalSearchParams();
   
   const { 
     phone, 
-    isFirebaseAuth = 'false', 
     role = 'driver'
   } = params as {
     phone: string;
@@ -25,7 +26,7 @@ const OtpScreen: React.FC = () => {
     role?: string;
   };
 
-  const isBackendAuth = isFirebaseAuth === 'false';
+  const isBackendAuth = 'false';
 
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
@@ -43,13 +44,30 @@ const OtpScreen: React.FC = () => {
         role,
       });
     }
-    
+
     // Validate required params
     if (!phone) {
       console.error("[OTP SCREEN] Missing phone parameter");
       router.replace('/screens/DriverAuth');
       return;
     }
+
+    // Send OTP on mount and store for display
+    (async () => {
+      setLoading(true);
+      try {
+        const result = await BackendOTPAuth.sendOTP(phone, role as 'driver' | 'patient' | 'doctor');
+        if (result.success && result.otp) {
+          setBackendOtp(result.otp);
+        } else {
+          setBackendOtp(null);
+        }
+      } catch {
+        setBackendOtp(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   // Countdown timer for resend
@@ -72,18 +90,13 @@ const OtpScreen: React.FC = () => {
     
     try {
       const result = await BackendOTPAuth.sendOTP(phone, role as 'driver' | 'patient' | 'doctor');
-      
       if (result.success) {
-        // Show the OTP in development for testing
-        if (result.otp && __DEV__) {
-          Alert.alert(
-            "Development Mode", 
-            `New OTP sent!\n\nFor testing: ${result.otp}`,
-            [{ text: "OK" }]
-          );
+        if (result.otp) {
+          setBackendOtp(result.otp);
         } else {
-          Alert.alert("Success", "New OTP sent to your phone");
+          setBackendOtp(null);
         }
+        Alert.alert("Success", result.otp ? `OTP sent!\n ${result.otp}` : "New OTP sent to your phone");
       } else {
         setError(result.message || 'Failed to resend OTP');
       }
@@ -146,21 +159,21 @@ const OtpScreen: React.FC = () => {
       
       if (result.success && result.tokens && result.user) {
         console.log('[BACKEND OTP] Verification successful');
-        
-        // Store tokens securely
-        await AsyncStorage.setItem('accessToken', result.tokens.accessToken);
-        await AsyncStorage.setItem('refreshToken', result.tokens.refreshToken);
+
+        // Store tokens securely (standardized keys)
+        await AsyncStorage.setItem('access_token', result.tokens.accessToken);
+        await AsyncStorage.setItem('refresh_token', result.tokens.refreshToken);
         await AsyncStorage.setItem('role', result.user.role);
-        
+
         // Check if profile is complete
         const profileComplete = result.user.profileCompleted || false;
         await AsyncStorage.setItem('profile_complete', profileComplete.toString());
-        
+
         console.log('[BACKEND OTP] Profile complete:', profileComplete);
-        
+
         // Small delay for UI feedback
         await new Promise(resolve => setTimeout(resolve, 300));
-        
+
         // Navigate based on profile completion
         if (profileComplete) {
           router.replace('/navigation/MainTabs');
@@ -205,8 +218,14 @@ const OtpScreen: React.FC = () => {
         Verify Phone
       </Text>
       <Text style={[s.textBase, s.textCenter, s.textGray600, s.mx4]}>
-        We sent a 6-digit code to {phone}.       
+        We sent a 6-digit code to {phone}.
       </Text>
+
+      {backendOtp && (
+        <Text style={[s.textBase, s.textCenter, s.textDanger500, s.my2, s.fontBold]}>
+          {backendOtp}
+        </Text>
+      )}
 
       <View style={[s.flexRow, s.justifyCenter, { gap: 8 }, s.my4]}>
         {otpDigits.map((digit, index) => (
