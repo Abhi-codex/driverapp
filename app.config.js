@@ -24,7 +24,7 @@ export default {
     ],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.dhruva12.instaaid.driver",
+      bundleIdentifier: "com.instaaid.driver",
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
       },
@@ -34,7 +34,7 @@ export default {
       }
     },
     android: {
-      package: "com.dhruva12.instaaid.driver",
+      package: "com.instaaid.driver",
       edgeToEdgeEnabled: true,
       permissions: [
         "android.permission.RECEIVE_SMS",
@@ -63,7 +63,9 @@ export default {
       favicon: "./assets/images/logo.png"
     },
     plugins: [
-      "expo-location"
+      "expo-location",
+      "expo-router",
+      "expo-secure-store"
     ],
     experiments: {
       typedRoutes: true
@@ -71,7 +73,7 @@ export default {
     extra: {
       router: {},
       eas: {
-        "projectId": "3e15ce98-13c4-412b-b8a8-69a46ff33a7a"
+        "projectId": "a5dae13a-8828-49d1-8f21-d8d13037fd49"
       },
       EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
     }
