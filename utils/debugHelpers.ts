@@ -1,8 +1,6 @@
-/**
- * Debug helper - Clear all stored tokens to force fresh authentication
- * Run this in the app console to reset authentication state
- */
-
+ // Debug helper - Clear all stored tokens to force fresh authentication
+ // Run this in the app console to reset authentication state
+ 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const clearAuthTokens = async () => {

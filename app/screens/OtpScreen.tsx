@@ -4,7 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { StackNavigationProp } from "@react-navigation/stack";
 import { styles as s } from "../../constants/tailwindStyles";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
-import { BackendOTPAuth } from "../../utils/backendOTPAuth";
+import { OTPAuth } from "../../utils/otpauth";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DEBUG = __DEV__ === true;
@@ -69,7 +69,7 @@ const OtpScreen: React.FC = () => {
     (async () => {
       setLoading(true);
       try {
-        const result = await BackendOTPAuth.sendOTP(phone, role as 'driver' | 'patient' | 'doctor');
+        const result = await OTPAuth.sendOTP(phone, role as 'driver' | 'patient' | 'doctor');
         if (result.success) {
           if (result.otp) {
             setBackendOtp(result.otp);
@@ -106,7 +106,7 @@ const OtpScreen: React.FC = () => {
     setLoading(true);
     
     try {
-      const result = await BackendOTPAuth.sendOTP(phone, role as 'driver' | 'patient' | 'doctor');
+      const result = await OTPAuth.sendOTP(phone, role as 'driver' | 'patient' | 'doctor');
       if (result.success) {
         if (result.otp) {
           setBackendOtp(result.otp);
@@ -173,7 +173,7 @@ const OtpScreen: React.FC = () => {
     try {
       console.log('[BACKEND OTP] Verifying OTP:', otp);
       
-      const result = await BackendOTPAuth.verifyOTP(phone, otp);
+      const result = await OTPAuth.verifyOTP(phone, otp);
       
       if (result.success && result.tokens && result.user) {
         console.log('[BACKEND OTP] Verification successful');

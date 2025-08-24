@@ -6,7 +6,7 @@ export interface OTPResult {
   success: boolean;
   message: string;
   phone?: string;
-  otp?: string; // Only in development mode
+  otp?: string;
   expiresIn?: string;
 }
 
@@ -21,18 +21,9 @@ export interface AuthResult {
   profile?: any;
 }
 
-interface OTPResponse {
-  success: boolean;
-  message: string;
-  phone?: string;
-  otp?: string;
-  expiresIn?: string;
-}
-
-export class BackendOTPAuth {
-  /**
-   * Send OTP to phone number
-   */
+export class OTPAuth {
+  
+  // Send OTP to phone number
   static async sendOTP(phoneNumber: string, role: 'driver' | 'patient' | 'doctor' = 'driver'): Promise<OTPResult> {
     try {
       if (DEBUG) console.log('[BACKEND OTP] Sending OTP to:', phoneNumber, 'role:', role);
@@ -86,10 +77,7 @@ export class BackendOTPAuth {
       };
     }
   }
-
-  /**
-   * Verify OTP code
-   */
+  // Verify OTP code
   static async verifyOTP(phoneNumber: string, otp: string): Promise<AuthResult> {
     try {
       if (DEBUG) console.log('[BACKEND OTP] Verifying OTP for:', phoneNumber);
@@ -140,9 +128,7 @@ export class BackendOTPAuth {
     }
   }
 
-  /**
-   * Make authenticated API request
-   */
+  // Make authenticated API request
   static async makeAuthenticatedRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
     const AsyncStorage = await import('@react-native-async-storage/async-storage');
     
@@ -167,9 +153,7 @@ export class BackendOTPAuth {
     }
   }
 
-  /**
-   * Format phone number for backend
-   */
+  // Format phone number for backend
   static formatPhoneNumber(phoneNumber: string, countryCode: string = '+91'): string {
     // Remove all non-digit characters
     const cleaned = phoneNumber.replace(/\D/g, '');
@@ -182,9 +166,7 @@ export class BackendOTPAuth {
     return `+${cleaned}`;
   }
 
-  /**
-   * Check if user is authenticated
-   */
+  // Check if user is authenticated
   static async isAuthenticated(): Promise<boolean> {
     const AsyncStorage = await import('@react-native-async-storage/async-storage');
     
@@ -196,9 +178,7 @@ export class BackendOTPAuth {
     }
   }
 
-  /**
-   * Sign out user
-   */
+  // Sign out user
   static async signOut(): Promise<void> {
     const AsyncStorage = await import('@react-native-async-storage/async-storage');
     
@@ -206,8 +186,8 @@ export class BackendOTPAuth {
       await AsyncStorage.default.multiRemove([
         'accessToken',
         'refreshToken',
-        'access_token', // Legacy key
-        'refresh_token', // Legacy key
+        'access_token',
+        'refresh_token',
         'role',
         'profile_complete'
       ]);
@@ -220,4 +200,4 @@ export class BackendOTPAuth {
   }
 }
 
-export default BackendOTPAuth;
+export default OTPAuth;

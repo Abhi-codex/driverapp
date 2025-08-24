@@ -5,7 +5,7 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, T
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, styles } from "../../constants/tailwindStyles";
 import LabelInput from "../../components/LabelInput";
-import { BackendOTPAuth } from "../../utils/backendOTPAuth";
+import { OTPAuth } from "../../utils/otpauth";
 
 export default function DriverAuthScreen() {
   const router = useRouter();
@@ -56,12 +56,12 @@ export default function DriverAuthScreen() {
     setLoading(true);
 
     try {
-      const formattedPhone = BackendOTPAuth.formatPhoneNumber(phoneNumber, '+91');
+      const formattedPhone = OTPAuth.formatPhoneNumber(phoneNumber, '+91');
       console.log('[DRIVER AUTH] Sending OTP to:', formattedPhone);
       
       // Send OTP via Backend
-      const result = await BackendOTPAuth.sendOTP(formattedPhone, 'driver');
-      
+      const result = await OTPAuth.sendOTP(formattedPhone, 'driver');
+
       if (result.success) {
         console.log('[DRIVER AUTH] OTP sent successfully');
         
