@@ -22,11 +22,8 @@ const OtpScreen: React.FC = () => {
     role = 'driver'
   } = params as {
     phone: string;
-    isFirebaseAuth?: string;
     role?: string;
   };
-
-  const isBackendAuth = 'false';
 
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
@@ -57,7 +54,6 @@ const OtpScreen: React.FC = () => {
     if (DEBUG) {
       console.log("[OTP SCREEN] Received params:", {
         phone,
-        isBackendAuth,
         role,
       });
     }
@@ -74,10 +70,14 @@ const OtpScreen: React.FC = () => {
       setLoading(true);
       try {
         const result = await BackendOTPAuth.sendOTP(phone, role as 'driver' | 'patient' | 'doctor');
-        if (result.success && result.otp) {
-          setBackendOtp(result.otp);
-        } else {
-          setBackendOtp(null);
+        if (result.success) {
+          if (result.otp) {
+            setBackendOtp(result.otp);
+            // Show OTP in alert for both development and production
+            Alert.alert("OTP Sent", `Your OTP is: ${result.otp}.`);
+          } else {
+            setBackendOtp(null);
+          }
         }
       } catch {
         setBackendOtp(null);
@@ -110,7 +110,7 @@ const OtpScreen: React.FC = () => {
       if (result.success) {
         if (result.otp) {
           setBackendOtp(result.otp);
-          Alert.alert("Success", `OTP sent!\n${result.otp}`);
+          Alert.alert("OTP Resent", `Your new OTP is: ${result.otp}\n\nPlease enter it below to verify your phone number.`);
         } else {
           setBackendOtp(null);
           Alert.alert("Success", "New OTP sent to your phone");

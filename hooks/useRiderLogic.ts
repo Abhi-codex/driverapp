@@ -109,13 +109,8 @@ export const useRiderLogic = () => {
   }, []);
 
   const makeAuthenticatedRequest = useCallback(async (url: string, options: RequestInit = {}, timeout: number = 10000) => {
-    // Try Firebase ID token first (preferred for driver endpoints)
-    let token = await AsyncStorage.getItem("firebase_id_token");
-    
-    // Fallback to access token if no Firebase token
-    if (!token) {
-      token = await AsyncStorage.getItem("access_token");
-    }
+    // Get access token for authentication
+    const token = await AsyncStorage.getItem("access_token");
     
     if (!token) {
       throw new Error('No authentication token found');
@@ -140,35 +135,7 @@ export const useRiderLogic = () => {
 
       if (!response.ok) {
         if (response.status === 401) {
-          // If Firebase token failed, try access token as fallback
-          const fallbackToken = await AsyncStorage.getItem("access_token");
-          if (fallbackToken && token !== fallbackToken) {
-            const retryController = new AbortController();
-            const retryTimeoutId = setTimeout(() => retryController.abort(), timeout);
-            
-            try {
-              const retryResponse = await fetch(url, {
-                ...options,
-                headers: {
-                  'Authorization': `Bearer ${fallbackToken}`,
-                  'Content-Type': 'application/json',
-                  ...options.headers,
-                },
-                signal: retryController.signal,
-              });
-              
-              clearTimeout(retryTimeoutId);
-              
-              if (retryResponse.ok) {
-                return retryResponse.json();
-              }
-            } catch (retryError) {
-              clearTimeout(retryTimeoutId);
-              throw retryError;
-            }
-          }
-          
-          // Try to refresh token as last resort
+          // Try to refresh token
           await refreshAuthToken();
           throw new Error('Authentication failed');
         }

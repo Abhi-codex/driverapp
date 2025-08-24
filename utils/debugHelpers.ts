@@ -10,7 +10,6 @@ export const clearAuthTokens = async () => {
     await AsyncStorage.multiRemove([
       'access_token',
       'refresh_token', 
-      'firebase_id_token',
       'role',
       'profile_complete'
     ]);

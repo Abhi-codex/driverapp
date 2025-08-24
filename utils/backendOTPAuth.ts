@@ -6,7 +6,7 @@ export interface OTPResult {
   success: boolean;
   message: string;
   phone?: string;
-  otp?: string; // Only in development
+  otp?: string; // Only in development mode
   expiresIn?: string;
 }
 
@@ -19,6 +19,14 @@ export interface AuthResult {
     refreshToken: string;
   };
   profile?: any;
+}
+
+interface OTPResponse {
+  success: boolean;
+  message: string;
+  phone?: string;
+  otp?: string;
+  expiresIn?: string;
 }
 
 export class BackendOTPAuth {
@@ -49,11 +57,11 @@ export class BackendOTPAuth {
           hasOTP: !!data.otp,
           phone: data.phone
         });
-        
-        // Show OTP in development for testing
-        if (data.otp && __DEV__) {
-          console.log('[BACKEND OTP] 🔑 Development OTP:', data.otp);
-        }
+      }
+
+      // Show OTP in both development and production for now
+      if (data.otp) {
+        console.log('[BACKEND OTP] 🔑 OTP for testing:', data.otp);
       }
 
       if (response.ok && data.success) {
@@ -139,7 +147,7 @@ export class BackendOTPAuth {
     const AsyncStorage = await import('@react-native-async-storage/async-storage');
     
     try {
-      const accessToken = await AsyncStorage.default.getItem('accessToken');
+      const accessToken = await AsyncStorage.default.getItem('access_token');
       
       if (!accessToken) {
         throw new Error('No access token found');
@@ -181,7 +189,7 @@ export class BackendOTPAuth {
     const AsyncStorage = await import('@react-native-async-storage/async-storage');
     
     try {
-      const accessToken = await AsyncStorage.default.getItem('accessToken');
+      const accessToken = await AsyncStorage.default.getItem('access_token');
       return !!accessToken;
     } catch (error) {
       return false;
@@ -200,7 +208,6 @@ export class BackendOTPAuth {
         'refreshToken',
         'access_token', // Legacy key
         'refresh_token', // Legacy key
-        'firebase_id_token', // Legacy key
         'role',
         'profile_complete'
       ]);
@@ -208,6 +215,7 @@ export class BackendOTPAuth {
       if (DEBUG) console.log('[BACKEND OTP] User signed out successfully');
     } catch (error) {
       if (DEBUG) console.error('[BACKEND OTP] Sign out error:', error);
+      throw error;
     }
   }
 }

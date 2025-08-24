@@ -65,11 +65,11 @@ export default function DriverAuthScreen() {
       if (result.success) {
         console.log('[DRIVER AUTH] OTP sent successfully');
         
-        // Show the OTP in development for testing
-        if (result.otp && __DEV__) {
+        // Show the OTP in both development and production for now
+        if (result.otp) {
           Alert.alert(
-            "Development Mode", 
-            `OTP sent successfully!\n\nFor testing: ${result.otp}`,
+            "OTP Sent", 
+            `Your OTP is: ${result.otp}.`,
             [{ text: "OK" }]
           );
         } else {
@@ -80,7 +80,6 @@ export default function DriverAuthScreen() {
           pathname: '/screens/OtpScreen',
           params: {
             phone: formattedPhone,
-            isFirebaseAuth: 'false', // Using backend OTP now
             role: 'driver'
           }
         });

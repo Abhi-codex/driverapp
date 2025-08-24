@@ -130,9 +130,8 @@ export default function DriverDashboard() {
     
     try {
       const token = await AsyncStorage.getItem('access_token');
-      const firebaseToken = await AsyncStorage.getItem('firebase_id_token');
       
-      if (!firebaseToken && !token) {
+      if (!token) {
         setDriverName('Driver');
         setProfileLoaded(true);
         return;
@@ -147,7 +146,7 @@ export default function DriverDashboard() {
       try {
         let profileResponse = await fetch(`${getServerUrl()}/driver/profile`, {
           headers: { 
-            'Authorization': `Bearer ${firebaseToken || token}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
           signal: controller.signal
@@ -208,7 +207,6 @@ export default function DriverDashboard() {
             await AsyncStorage.multiRemove([
               'access_token',
               'refresh_token',
-              'firebase_id_token',
               'role',
               'driver_profile'
             ]);
