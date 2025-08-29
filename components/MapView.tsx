@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Constants from 'expo-constants';
 import { Platform, Text, View, TouchableOpacity, StatusBar } from 'react-native';
 import { MaterialIcons, Ionicons, FontAwesome5, Fontisto } from '@expo/vector-icons';
 import { colors, styles } from '../constants/tailwindStyles';
@@ -371,6 +372,8 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
   const [theme, setTheme] = useState<'day' | 'night'>(props.theme || 'day');
   const [currentStyle, setCurrentStyle] = useState<any[]>([]);
   const [controlsVisible, setControlsVisible] = useState(false);
+  const [staticApiStatus, setStaticApiStatus] = useState<string | null>(null);
+  const [mapCenter, setMapCenter] = useState<{ latitude: number; longitude: number } | null>(null);
 
   // Set theme styles
   useEffect(() => {
@@ -398,8 +401,48 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
     return <WebMapFallback {...props} />;
   }
   
+  const handleMapReady = () => {
+    // propagate to parent
+    try {
+      props.onMapReady && props.onMapReady();
+    } catch (e) {
+      console.log('prop onMapReady threw', e);
+    }
+
+    // Probe Google Static Maps API to verify API key + tile access
+    (async () => {
+      try {
+        const apiKey = (Constants?.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)
+          || ((Constants?.manifest as any)?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)
+          || process?.env?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+        const center = props.region || props.initialRegion;
+        if (!apiKey || !center) {
+          setStaticApiStatus('missing-params');
+          return;
+        }
+
+        setMapCenter({ latitude: center.latitude, longitude: center.longitude });
+
+        const url = `https://maps.googleapis.com/maps/api/staticmap?center=${center.latitude},${center.longitude}&zoom=13&size=200x200&key=${apiKey}`;
+        console.log('Static map probe URL:', url.replace(/key=.*$/, 'key=REDACTED'));
+        const resp = await fetch(url);
+        if (resp.ok) {
+          setStaticApiStatus('ok');
+        } else {
+          const txt = await resp.text();
+          console.log('Static map probe failed:', resp.status, txt.slice(0, 300));
+          setStaticApiStatus(`err:${resp.status}`);
+        }
+      } catch (err) {
+        console.log('Static map probe error', err);
+        setStaticApiStatus('error');
+      }
+    })();
+  };
+
   return (
-    <View style={{ flex: 1, position: 'relative' }}>
+  <View style={{ flex: 1, position: 'relative' }}>
       <MapView
         provider={PROVIDER_GOOGLE}
         style={[{ flex: 1, height: '100%', width: '100%' }, props.style]}
@@ -434,7 +477,7 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
         toolbarEnabled={false}
         onPress={props.onPress}
         onRegionChangeComplete={props.onRegionChangeComplete}
-        onMapReady={props.onMapReady}
+  onMapReady={handleMapReady}
         onError={props.onError}
         onMapLoaded={() => {
           console.log('Enhanced Google Maps loaded successfully');
@@ -442,6 +485,31 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
       >
         {props.children}
       </MapView>
+
+      {/* Debug badge: show provider / API key availability at runtime */}
+      <View style={{ position: 'absolute', top: 12, right: 12, zIndex: 1200 }}>
+        <View style={{ backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 8 }}>
+          <Text style={{ color: '#fff', fontSize: 11 }}>
+            Provider: {PROVIDER_GOOGLE ? 'google' : 'none'}
+          </Text>
+          <Text style={{ color: '#fff', fontSize: 11 }}>
+            API Key: {(
+              // Read API key from Expo Constants (expo-config or manifest extra), fallback to process.env
+              (Constants?.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)
+                || ((Constants?.manifest as any)?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)
+              || process?.env?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+            ) ? 'present' : 'missing'}
+          </Text>
+          <Text style={{ color: '#fff', fontSize: 11 }}>
+            Static: {staticApiStatus || 'pending'}
+          </Text>
+          {mapCenter && (
+            <Text style={{ color: '#fff', fontSize: 11 }}>
+              Center: {mapCenter.latitude.toFixed(4)},{mapCenter.longitude.toFixed(4)}
+            </Text>
+          )}
+        </View>
+      </View>
 
       {/* Map Controls Overlay */}
       {(props.showMapTypeSelector !== false || props.showFeatureControls !== false) && (
