@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { ApiResponse, Driver, DriverStats, Ride, RideResponse, RideStatus } from '../types/rider';
 import { getServerUrl } from '../utils/network';
+import NavigationService, { RouteInfo } from '../utils/navigationService';
 
 export const useRiderLogic = () => {
   const [routeCoords, setRouteCoords] = useState<Array<{ latitude: number; longitude: number }>>([]);
@@ -16,6 +17,12 @@ export const useRiderLogic = () => {
   
   // Store current driver location in the hook
   const [currentDriverLocation, setCurrentDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  
+  // Navigation states
+  const [navigationService] = useState(() => NavigationService.getInstance());
+  const [currentRoute, setCurrentRoute] = useState<RouteInfo | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [navigationStage, setNavigationStage] = useState<'idle' | 'to_patient' | 'to_hospital'>('idle');
   
   // Driver statistics and profile data with proper types
   const [driverStats, setDriverStats] = useState<DriverStats>({
@@ -39,6 +46,7 @@ export const useRiderLogic = () => {
   useEffect(() => {
     fetchDriverProfile();
     fetchDriverStats();
+    loadPersistedRide(); 
     
     return () => {
       if (refreshInterval) {
@@ -462,6 +470,9 @@ export const useRiderLogic = () => {
         setAvailableRides([]);
         setTripStarted(false);
         
+        // Persist the accepted ride to storage
+        await persistRide(data.ride, false);
+        
         const dropLocation = {
           latitude: data.ride.drop.latitude,
           longitude: data.ride.drop.longitude,
@@ -620,6 +631,123 @@ export const useRiderLogic = () => {
     }
   }, [makeAuthenticatedRequest, handleApiError, driverProfile]);
 
+  // Ride persistence functions
+  const persistRide = useCallback(async (ride: Ride, started: boolean = false) => {
+    try {
+      await AsyncStorage.setItem('accepted_ride', JSON.stringify(ride));
+      await AsyncStorage.setItem('trip_started', JSON.stringify(started));
+      console.log('✅ Ride persisted to storage');
+    } catch (error) {
+      console.error('❌ Failed to persist ride:', error);
+    }
+  }, []);
+
+  const loadPersistedRide = useCallback(async () => {
+    try {
+      const rideData = await AsyncStorage.getItem('accepted_ride');
+      const tripData = await AsyncStorage.getItem('trip_started');
+      
+      if (rideData) {
+        const ride = JSON.parse(rideData);
+        const started = tripData ? JSON.parse(tripData) : false;
+        
+        setAcceptedRide(ride);
+        setTripStarted(started);
+        console.log('✅ Loaded persisted ride:', ride._id);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load persisted ride:', error);
+    }
+  }, []);
+
+  const clearPersistedRide = useCallback(async () => {
+    try {
+      await AsyncStorage.removeItem('accepted_ride');
+      await AsyncStorage.removeItem('trip_started');
+      console.log('✅ Cleared persisted ride');
+    } catch (error) {
+      console.error('❌ Failed to clear persisted ride:', error);
+    }
+  }, []);
+
+  // Navigation functions
+  const startNavigation = useCallback(async (
+    destination: { latitude: number; longitude: number },
+    stage: 'to_patient' | 'to_hospital'
+  ) => {
+    if (!currentDriverLocation) {
+      throw new Error('Driver location not available');
+    }
+
+    try {
+      setLoading(true);
+      setNavigationStage(stage);
+      
+      // Calculate route and get polyline coordinates
+      const routeInfo = await navigationService.startEmergencyNavigation(
+        acceptedRide!,
+        currentDriverLocation,
+        stage
+      );
+
+      // Decode polyline and set route coordinates for map display
+      const coords = decodePolyline(routeInfo.polyline);
+      setRouteCoords(coords);
+      setDestination(destination);
+      setCurrentRoute(routeInfo);
+      setIsNavigating(true);
+
+      return routeInfo;
+    } catch (error) {
+      console.error('Navigation start error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [currentDriverLocation, acceptedRide, navigationService]);
+
+  const stopNavigation = useCallback(() => {
+    navigationService.stopNavigation();
+    setIsNavigating(false);
+    setNavigationStage('idle');
+    setCurrentRoute(null);
+    setRouteCoords([]);
+    setDestination(null);
+  }, [navigationService]);
+
+  const handleStageComplete = useCallback(async (stage: 'pickup' | 'dropoff') => {
+    try {
+      if (stage === 'pickup' && acceptedRide) {
+        // Update ride status to 'START' and start trip
+        await updateRideStatus(acceptedRide._id, RideStatus.START);
+        setTripStarted(true);
+        setNavigationStage('to_hospital');
+        
+        // Persist the updated trip state
+        await persistRide(acceptedRide, true);
+        
+        // Auto-start navigation to hospital if driver location is available
+        if (currentDriverLocation && acceptedRide.drop) {
+          await startNavigation(acceptedRide.drop, 'to_hospital');
+        }
+      } else if (stage === 'dropoff' && acceptedRide) {
+        // Complete the ride
+        await updateRideStatus(acceptedRide._id, RideStatus.COMPLETED);
+        setTripStarted(false);
+        setAcceptedRide(null);
+        stopNavigation();
+        
+        // Clear persisted ride data
+        await clearPersistedRide();
+        
+        Alert.alert('Trip Completed', 'Ride has been completed successfully!');
+      }
+    } catch (error) {
+      console.error('Stage completion error:', error);
+      handleApiError(error, `Complete ${stage}`);
+    }
+  }, [acceptedRide, updateRideStatus, currentDriverLocation, startNavigation, stopNavigation, handleApiError, persistRide, clearPersistedRide]);
+
   return {
     // State
     routeCoords,
@@ -633,6 +761,11 @@ export const useRiderLogic = () => {
     loading,
     error,
     
+    // Navigation state
+    isNavigating,
+    navigationStage,
+    currentRoute,
+    
     // Actions
     handleAcceptRide,
     updateRideStatus,
@@ -644,6 +777,11 @@ export const useRiderLogic = () => {
     fetchDriverRideHistory,
     updateVehicleInfo,
     updateDriverLocation: setCurrentDriverLocation,
+    
+    // Navigation actions
+    startNavigation,
+    stopNavigation,
+    handleStageComplete,
     
     // Utilities
     clearError: () => setError(null),

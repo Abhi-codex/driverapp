@@ -4,6 +4,9 @@ import { colors, styles } from "../../constants/tailwindStyles";
 import { Ride } from "../../types/rider";
 import { MapViewWrapper as MapView, MarkerWrapper as Marker, PolylineWrapper as Polyline } from "../MapView";
 import { MaterialIcons } from '@expo/vector-icons';
+import NavigationControls from './NavigationControls';
+import InAppNavigation from './InAppNavigation';
+import { RouteInfo } from '../../utils/navigationService';
 
 interface DriverMapProps {
   driverLocation: {
@@ -18,6 +21,17 @@ interface DriverMapProps {
   online?: boolean;
   availableRides?: Ride[];
   isSearching?: boolean;
+  tripStarted?: boolean;
+  
+  // Navigation props
+  onNavigationStart?: (destination: { latitude: number; longitude: number }, stage: 'to_patient' | 'to_hospital') => void;
+  onNavigationStop?: () => void;
+  onStageComplete?: (stage: 'pickup' | 'dropoff') => void;
+  
+  // In-app navigation props
+  isNavigating?: boolean;
+  navigationStage?: 'idle' | 'to_patient' | 'to_hospital';
+  currentRoute?: RouteInfo | null;
 }
 
 function DriverMap({
@@ -26,6 +40,13 @@ function DriverMap({
   routeCoords,
   online = true,
   availableRides = [],
+  tripStarted = false,
+  onNavigationStart,
+  onNavigationStop,
+  onStageComplete,
+  isNavigating = false,
+  navigationStage = 'idle',
+  currentRoute = null
 }: DriverMapProps) {
 
   const mountedRef = useRef(true);
@@ -221,6 +242,35 @@ function DriverMap({
           />
         ))}
       </MapView>
+
+      {/* In-App Navigation Overlay */}
+      {isNavigating && currentRoute && acceptedRide && (
+        <InAppNavigation
+          routeInfo={currentRoute}
+          currentLocation={stableDriverLocation}
+          destination={navigationStage === 'to_patient' ? acceptedRide.pickup : acceptedRide.drop}
+          isNavigating={isNavigating}
+          onStopNavigation={onNavigationStop || (() => {})}
+          onStageComplete={() => {
+            if (onStageComplete) {
+              onStageComplete(navigationStage === 'to_patient' ? 'pickup' : 'dropoff');
+            }
+          }}
+          stageName={navigationStage === 'to_patient' ? 'Patient Pickup' : 'Hospital Delivery'}
+        />
+      )}
+
+      {/* Navigation Controls */}
+      {acceptedRide && onNavigationStart && onNavigationStop && onStageComplete && !isNavigating && (
+        <NavigationControls
+          acceptedRide={acceptedRide}
+          driverLocation={stableDriverLocation}
+          onNavigationStart={onNavigationStart}
+          onNavigationStop={onNavigationStop}
+          onStageComplete={onStageComplete}
+          tripStarted={tripStarted}
+        />
+      )}
     </View>
   );
 }

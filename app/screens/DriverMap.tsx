@@ -2,12 +2,12 @@ import DriverDrawer from "../../components/driver/DriverDrawer";
 import DriverMap from "../../components/driver/DriverMap";
 import * as Location from "expo-location";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Dimensions, StatusBar, Text, View, TouchableOpacity } from "react-native";
+import { ActivityIndicator, Alert, Dimensions, StatusBar, Text, View, TouchableOpacity, BackHandler } from "react-native";
 import { runOnJS, useAnimatedGestureHandler, useSharedValue, withSpring } from "react-native-reanimated";
 import { colors, styles } from "../../constants/tailwindStyles";
 import { useRiderLogic } from "../../hooks/useRiderLogic";
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 const { height: screenHeight } = Dimensions.get("window");
 
@@ -33,12 +33,21 @@ export default function DriverMapScreen() {
     acceptedRide,
     tripStarted,
     destination,
+    routeCoords,
     handleAcceptRide,
     handleRejectRide,
     toggleOnline,
     updateRideStatus,
     updateDriverLocation,
     driverStats,
+    
+    // Navigation functions
+    startNavigation,
+    stopNavigation,
+    handleStageComplete,
+    isNavigating,
+    navigationStage,
+    currentRoute
   } = useRiderLogic(); // Remove driverLocation parameter to prevent continuous refresh
 
   // Auto-expand drawer when ride is accepted
@@ -55,6 +64,50 @@ export default function DriverMapScreen() {
       autoExpandedRideId.current = null;
     }
   }, [acceptedRide?._id]);
+
+  // Handle back button protection when driver has accepted ride
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        if (acceptedRide) {
+          handleBackWithActiveRide();
+          return true; // Prevent default back behavior
+        }
+        return false; // Allow default back behavior
+      };
+
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => backHandler.remove();
+    }, [acceptedRide])
+  );
+
+  const handleBackWithActiveRide = () => {
+    Alert.alert(
+      'Active Ride',
+      'You have an ongoing ride. Do you want to return to the dashboard? Your ride will remain active.',
+      [
+        {
+          text: 'Stay on Map',
+          style: 'cancel'
+        },
+        {
+          text: 'Go to Dashboard',
+          onPress: () => {
+            // Navigate to dashboard but keep ride active
+            router.push('/screens/DriverDashboard');
+          }
+        }
+      ]
+    );
+  };
+
+  const handleBackButtonPress = () => {
+    if (acceptedRide) {
+      handleBackWithActiveRide();
+    } else {
+      router.back();
+    }
+  };
 
   const gestureHandler = useAnimatedGestureHandler({ 
     onStart: (_, context: any) => { context.startY = translateY.value; },
@@ -288,7 +341,7 @@ export default function DriverMapScreen() {
       <View style={[styles.absolute, { top: 50, left: 20, zIndex: 1000 }]}>
         <TouchableOpacity
           style={[styles.bgWhite, styles.roundedFull, styles.p3, styles.shadow]}
-          onPress={() => router.back()}
+          onPress={handleBackButtonPress}
         >
           <MaterialIcons name="arrow-back" size={24} color={colors.gray[700]} />
         </TouchableOpacity>
@@ -299,7 +352,14 @@ export default function DriverMapScreen() {
           driverLocation={driverLocation}
           destination={destination}
           acceptedRide={acceptedRide}
-          routeCoords={[]}
+          routeCoords={routeCoords}
+          tripStarted={tripStarted}
+          onNavigationStart={startNavigation}
+          onNavigationStop={stopNavigation}
+          onStageComplete={handleStageComplete}
+          isNavigating={isNavigating}
+          navigationStage={navigationStage}
+          currentRoute={currentRoute}
         />
       )}
 

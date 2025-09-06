@@ -18,7 +18,9 @@ export default function DriverDashboard() {
     online, 
     toggleOnline, 
     availableRides, 
-    fetchDriverStats 
+    fetchDriverStats,
+    acceptedRide,
+    tripStarted
   } = useRiderLogic();
 
   useEffect(() => {
@@ -305,6 +307,8 @@ export default function DriverDashboard() {
         <Drive 
           isOnline={online}
           availableRidesCount={availableRides.length}
+          hasActiveRide={!!acceptedRide}
+          isTrip={tripStarted}
           onPress={handleNavigateToMap}
         />
       </View>
