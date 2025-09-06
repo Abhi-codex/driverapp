@@ -381,6 +381,12 @@ export default function DriverMapScreen() {
           distanceKm={distanceKm}
           etaMinutes={etaMinutes}
           fare={fare}
+          isNavigating={isNavigating}
+          navigationStage={navigationStage}
+          currentRoute={currentRoute}
+          onNavigationStart={startNavigation}
+          onNavigationStop={stopNavigation}
+          onStageComplete={handleStageComplete}
         />
       )}
     </View>

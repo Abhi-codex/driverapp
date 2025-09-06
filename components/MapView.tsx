@@ -486,31 +486,6 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
         {props.children}
       </MapView>
 
-      {/* Debug badge: show provider / API key availability at runtime */}
-      <View style={{ position: 'absolute', top: 12, right: 12, zIndex: 1200 }}>
-        <View style={{ backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 8 }}>
-          <Text style={{ color: '#fff', fontSize: 11 }}>
-            Provider: {PROVIDER_GOOGLE ? 'google' : 'none'}
-          </Text>
-          <Text style={{ color: '#fff', fontSize: 11 }}>
-            API Key: {(
-              // Read API key from Expo Constants (expo-config or manifest extra), fallback to process.env
-              (Constants?.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)
-                || ((Constants?.manifest as any)?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)
-              || process?.env?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
-            ) ? 'present' : 'missing'}
-          </Text>
-          <Text style={{ color: '#fff', fontSize: 11 }}>
-            Static: {staticApiStatus || 'pending'}
-          </Text>
-          {mapCenter && (
-            <Text style={{ color: '#fff', fontSize: 11 }}>
-              Center: {mapCenter.latitude.toFixed(4)},{mapCenter.longitude.toFixed(4)}
-            </Text>
-          )}
-        </View>
-      </View>
-
       {/* Map Controls Overlay */}
       {(props.showMapTypeSelector !== false || props.showFeatureControls !== false) && (
         <MapControls

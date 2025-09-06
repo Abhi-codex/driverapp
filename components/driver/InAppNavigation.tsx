@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Alert, Animated, Dimensions } from 'react-native';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors, styles } from '../../constants/tailwindStyles';
-import { RouteInfo, NavigationStep } from '../../utils/navigationService';
+import { RouteInfo } from '../../utils/navigationService';
 
 interface InAppNavigationProps {
   routeInfo: RouteInfo | null;
@@ -147,10 +147,12 @@ export const InAppNavigation: React.FC<InAppNavigationProps> = ({
   return (
     <Animated.View style={[
       styles.absolute,
-      { top: 0, left: 0, right: 0, zIndex: 1000 },
+      { top: 40, left: 0, right: 0, zIndex: 1000 },
       styles.bgWhite,
       styles.shadowLg,
-      { height: animatedHeight }
+      styles.rounded2xl,
+      styles.mx2,
+      { height: animatedHeight, elevation: 20 }
     ]}>
       {/* Compact Header (Always Visible) */}
       <View style={[styles.px4, styles.py3, styles.flexRow, styles.alignCenter, styles.justifyBetween]}>

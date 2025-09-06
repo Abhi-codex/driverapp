@@ -4,8 +4,6 @@ import { colors, styles } from "../../constants/tailwindStyles";
 import { Ride } from "../../types/rider";
 import { MapViewWrapper as MapView, MarkerWrapper as Marker, PolylineWrapper as Polyline } from "../MapView";
 import { MaterialIcons } from '@expo/vector-icons';
-import NavigationControls from './NavigationControls';
-import InAppNavigation from './InAppNavigation';
 import { RouteInfo } from '../../utils/navigationService';
 
 interface DriverMapProps {
@@ -242,35 +240,6 @@ function DriverMap({
           />
         ))}
       </MapView>
-
-      {/* In-App Navigation Overlay */}
-      {isNavigating && currentRoute && acceptedRide && (
-        <InAppNavigation
-          routeInfo={currentRoute}
-          currentLocation={stableDriverLocation}
-          destination={navigationStage === 'to_patient' ? acceptedRide.pickup : acceptedRide.drop}
-          isNavigating={isNavigating}
-          onStopNavigation={onNavigationStop || (() => {})}
-          onStageComplete={() => {
-            if (onStageComplete) {
-              onStageComplete(navigationStage === 'to_patient' ? 'pickup' : 'dropoff');
-            }
-          }}
-          stageName={navigationStage === 'to_patient' ? 'Patient Pickup' : 'Hospital Delivery'}
-        />
-      )}
-
-      {/* Navigation Controls */}
-      {acceptedRide && onNavigationStart && onNavigationStop && onStageComplete && !isNavigating && (
-        <NavigationControls
-          acceptedRide={acceptedRide}
-          driverLocation={stableDriverLocation}
-          onNavigationStart={onNavigationStart}
-          onNavigationStop={onNavigationStop}
-          onStageComplete={onStageComplete}
-          tripStarted={tripStarted}
-        />
-      )}
     </View>
   );
 }

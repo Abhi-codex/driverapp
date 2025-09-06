@@ -26,6 +26,14 @@ interface DriverDrawerProps {
   distanceKm: string;
   etaMinutes: number;
   fare: number;
+  
+  // Navigation props
+  isNavigating?: boolean;
+  navigationStage?: 'idle' | 'to_patient' | 'to_hospital';
+  currentRoute?: any;
+  onNavigationStart?: (destination: { latitude: number; longitude: number }, stage: 'to_patient' | 'to_hospital') => void;
+  onNavigationStop?: () => void;
+  onStageComplete?: (stage: 'pickup' | 'dropoff') => void;
 }
 
 export default function DriverDrawer({
@@ -45,6 +53,12 @@ export default function DriverDrawer({
   distanceKm,
   etaMinutes,
   fare,
+  isNavigating = false,
+  navigationStage = 'idle',
+  currentRoute = null,
+  onNavigationStart,
+  onNavigationStop,
+  onStageComplete,
 }: DriverDrawerProps) {
   const drawerStyle = useAnimatedStyle(() => {
     return {
@@ -70,8 +84,8 @@ export default function DriverDrawer({
   return (
     <Animated.View
       style={[ styles.absolute, styles.left1, styles.right1, styles.bgWhite, styles.rounded2xl, 
-        styles.shadowLg, styles.z999, styles.roundedTl3xl, styles.roundedTr3xl,
-        { height: screenHeight, top: 0 }, drawerStyle ]}>
+        styles.shadowLg, styles.roundedTl3xl, styles.roundedTr3xl,
+        { height: screenHeight, top: 0, zIndex: 100 }, drawerStyle ]}>
       <PanGestureHandler onGestureEvent={gestureHandler}>
         <Animated.View
           style={[ styles.alignCenter, styles.py3, styles.borderB1, styles.borderGray100, handleStyle ]}>
@@ -87,6 +101,9 @@ export default function DriverDrawer({
           online={online}
           todaysEarnings="125"
           ongoingRide={acceptedRide}
+          isNavigating={isNavigating}
+          navigationStage={navigationStage}
+          currentRoute={currentRoute}
         />
       ) : (
         <DriverDrawerContent
@@ -104,6 +121,12 @@ export default function DriverDrawer({
           distanceKm={distanceKm}
           etaMinutes={etaMinutes}
           fare={fare}
+          isNavigating={isNavigating}
+          navigationStage={navigationStage}
+          currentRoute={currentRoute}
+          onNavigationStart={onNavigationStart}
+          onNavigationStop={onNavigationStop}
+          onStageComplete={onStageComplete}
         />
       )}
     </Animated.View>

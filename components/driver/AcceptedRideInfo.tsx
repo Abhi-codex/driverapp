@@ -190,80 +190,59 @@ function AcceptedRideInfo({
 
   return (
     <ScrollView style={[styles.flex1]} showsVerticalScrollIndicator={false} bounces={false}>
-      {/* Professional Header with Status */}
-      <View style={[styles.mb4, styles.p4, styles.roundedLg, styles.border,
-        { backgroundColor: colors.emergency[50], borderColor: colors.emergency[200] }]}> 
+      {/* Clean Header */}
+      <View style={[styles.mb4, styles.p4, styles.roundedLg, { backgroundColor: colors.gray[50] }]}> 
         <View style={[styles.flexRow, styles.alignCenter, styles.justifyBetween, styles.mb3]}>
           <View style={[styles.flexRow, styles.alignCenter]}>
-            <MaterialCommunityIcons name={statusInfo.icon as any} size={20} color={statusInfo.color} style={[styles.mr2]} />
-            <Text style={[styles.textLg, styles.fontBold, styles.textGray800]}>
-              Active Emergency
-            </Text>
-          </View>
-          <View style={[styles.px3, styles.py1, styles.roundedFull, { backgroundColor: statusInfo.color + '20' }]}>
-            <Text style={[styles.textXs, styles.fontBold, { color: statusInfo.color }]}>
-              {statusInfo.label.toUpperCase()}
-            </Text>
-          </View>
-        </View>
-
-        {/* Ambulance Type Info */}
-        <View style={[styles.flexRow, styles.alignCenter, styles.mb2]}>
-          <View style={[styles.w10, styles.h10, styles.roundedLg, styles.mr3, styles.alignCenter, 
-            styles.justifyCenter, { backgroundColor: colors.medical[100] }]}> 
-            <MaterialCommunityIcons name={ambulanceDetails.icon as any} size={20} color={ambulanceDetails.color} />
-          </View>
-          <View style={[styles.flex1]}>
-            <Text style={[styles.textBase, styles.fontBold, styles.textGray800]}>
+            <View style={[styles.w10, styles.h10, styles.roundedFull, styles.alignCenter, styles.justifyCenter, { backgroundColor: colors.emergency[100] }]}>
+              <MaterialCommunityIcons name={statusInfo.icon as any} size={20} color={statusInfo.color} />
+            </View>
+            <Text style={[styles.textLg, styles.fontSemibold, styles.textGray900, styles.ml3]}>
               {ambulanceDetails.name}
             </Text>
-            <Text style={[styles.textSm, styles.textGray600]}>
-              Request ID: #{acceptedRide._id.slice(-6).toUpperCase()}
+          </View>
+          <View style={[styles.px3, styles.py1, styles.roundedFull, { backgroundColor: statusInfo.color + '15' }]}>
+            <Text style={[styles.textXs, styles.fontMedium, { color: statusInfo.color }]}>
+              {statusInfo.label}
             </Text>
-            {/* Hospital Name */}
-            {acceptedRide.hospitalDetails?.name && (
-              <View style={[styles.flexRow, styles.alignCenter, styles.mt1]}>
-                <MaterialCommunityIcons name="hospital-building" size={16} color={colors.medical[600]} style={[styles.mr2]} />
-                <Text style={[styles.textSm, styles.fontBold, styles.textMedical700]}>
-                  {acceptedRide.hospitalDetails.name}
-                </Text>
-              </View>
-            )}
-            {/* Emergency Name */}
-            {acceptedRide.emergency?.name && (
-              <View style={[styles.flexRow, styles.alignCenter, styles.mt1]}>
-                <MaterialCommunityIcons name="alert" size={16} color={colors.emergency[600]} style={[styles.mr2]} />
-                <Text style={[styles.textSm, styles.fontMedium, styles.textEmergency600]}>
-                  {acceptedRide.emergency.name}
-                </Text>
-              </View>
-            )}
-            {/* Emergency Capability Score */}
-            {acceptedRide.hospitalDetails?.emergencyCapabilityScore !== undefined && (
-              <View style={[styles.flexRow, styles.alignCenter, styles.mt1]}>
-                <MaterialCommunityIcons name="star" size={16} color={colors.warning[500]} style={[styles.mr2]} />
-                <Text style={[styles.textXs, styles.textWarning600]}>
-                  Capability Score: {acceptedRide.hospitalDetails.emergencyCapabilityScore}
-                </Text>
-              </View>
-            )}
           </View>
         </View>
 
-        {/* Time and Fare Info Pills */}
-        <View style={[styles.flexRow, styles.gap2, styles.flexWrap]}>
-          <View style={[styles.flexRow, styles.py1, styles.px3, styles.roundedFull, styles.border,
-            styles.alignCenter, styles.borderGray200, { backgroundColor: colors.gray[50] }]}> 
-            <Octicons name="clock" size={12} color={colors.gray[600]} style={[styles.mr2]} />
-            <Text style={[styles.textXs, styles.textGray700, styles.fontMedium]}>
+        <Text style={[styles.textSm, styles.textGray600, styles.mb2]}>
+          Request ID: #{acceptedRide._id.slice(-6).toUpperCase()}
+        </Text>
+
+        {/* Emergency and Hospital Info */}
+        {acceptedRide.emergency?.name && (
+          <View style={[styles.flexRow, styles.alignCenter, styles.mb1]}>
+            <MaterialCommunityIcons name="alert" size={14} color={colors.emergency[600]} style={[styles.mr2]} />
+            <Text style={[styles.textSm, styles.fontMedium, styles.textGray800]}>
+              {acceptedRide.emergency.name}
+            </Text>
+          </View>
+        )}
+
+        {acceptedRide.hospitalDetails?.name && (
+          <View style={[styles.flexRow, styles.alignCenter, styles.mb3]}>
+            <MaterialCommunityIcons name="hospital-building" size={14} color={colors.medical[600]} style={[styles.mr2]} />
+            <Text style={[styles.textSm, styles.fontMedium, styles.textGray800]}>
+              {acceptedRide.hospitalDetails.name}
+            </Text>
+          </View>
+        )}
+
+        {/* Time and Fare Info */}
+        <View style={[styles.flexRow, styles.justifyBetween]}>
+          <View style={[styles.flexRow, styles.alignCenter]}>
+            <Octicons name="clock" size={12} color={colors.gray[500]} style={[styles.mr1]} />
+            <Text style={[styles.textXs, styles.textGray600]}>
               {relativeTime}
             </Text>
           </View>
           
-          <View style={[styles.flexRow, styles.py1, styles.px3, styles.roundedFull, styles.border,
-            styles.alignCenter, styles.borderGray200, { backgroundColor: colors.gray[50] }]}> 
-            <MaterialIcons name="attach-money" size={12} color={colors.warning[600]} style={[styles.mr2]} />
-            <Text style={[styles.textXs, styles.textGray700, styles.fontMedium]}>
+          <View style={[styles.flexRow, styles.alignCenter]}>
+            <MaterialIcons name="attach-money" size={12} color={colors.gray[500]} style={[styles.mr1]} />
+            <Text style={[styles.textXs, styles.textGray600]}>
               ₹{formatFare(acceptedRide.fare)}
             </Text>
           </View>
@@ -272,93 +251,63 @@ function AcceptedRideInfo({
 
       {/* Location Details */}
       <View style={[styles.mb4]}>
-        <Text style={[styles.textLg, styles.fontBold, styles.textGray800, styles.mb3]}>
+        <Text style={[styles.textBase, styles.fontSemibold, styles.textGray900, styles.mb3]}>
           Trip Details
         </Text>
         
         {/* Pickup Location */}
-        <View style={[
-          styles.p3, 
-          styles.roundedLg, 
-          styles.border, 
-          styles.mb2,
-          { backgroundColor: colors.primary[50], borderColor: colors.primary[200] }
-        ]}>
+        <View style={[styles.p3, styles.roundedLg, styles.mb3, { backgroundColor: colors.gray[50] }]}>
           <View style={[styles.flexRow, styles.alignCenter, styles.mb2]}>
             <MaterialCommunityIcons name="map-marker" size={16} color={colors.primary[600]} style={[styles.mr2]} />
-            <Text style={[styles.textSm, styles.fontBold, styles.textPrimary600]}>
-              PICKUP LOCATION
+            <Text style={[styles.textSm, styles.fontMedium, styles.textGray800]}>
+              Pickup Location
             </Text>
           </View>
-          <Text style={[styles.textBase, styles.textGray800, styles.mb1]} numberOfLines={2}>
+          <Text style={[styles.textSm, styles.textGray700]} numberOfLines={2}>
             {acceptedRide.pickup.address}
           </Text>
-          <View style={[styles.flexRow, styles.alignCenter]}>
-            <MaterialCommunityIcons name="clock-outline" size={12} color={colors.gray[600]} style={[styles.mr1]} />
-            <Text style={[styles.textXs, styles.textGray600]}>
-              Pickup location • {relativeTime}
-            </Text>
-          </View>
         </View>
 
         {/* Hospital/Drop Location */}
-        <View style={[
-          styles.p3, 
-          styles.roundedLg, 
-          styles.border,
-          { backgroundColor: colors.medical[50], borderColor: colors.medical[200] }
-        ]}>
+        <View style={[styles.p3, styles.roundedLg, { backgroundColor: colors.gray[50] }]}>
           <View style={[styles.flexRow, styles.alignCenter, styles.mb2]}>
             <MaterialCommunityIcons name="hospital-building" size={16} color={colors.medical[600]} style={[styles.mr2]} />
-            <Text style={[styles.textSm, styles.fontBold, styles.textMedical600]}>
-              DESTINATION HOSPITAL
+            <Text style={[styles.textSm, styles.fontMedium, styles.textGray800]}>
+              Destination Hospital
             </Text>
           </View>
-          <Text style={[styles.textBase, styles.textGray800, styles.mb1]} numberOfLines={2}>
+          <Text style={[styles.textSm, styles.textGray700]} numberOfLines={2}>
             {acceptedRide.drop.address}
           </Text>
-          <View style={[styles.flexRow, styles.alignCenter]}>
-            <MaterialCommunityIcons name="hospital-building" size={12} color={colors.gray[600]} style={[styles.mr1]} />
-            <Text style={[styles.textXs, styles.textGray600]}>
-              Destination hospital
-            </Text>
-          </View>
         </View>
       </View>
 
       {/* OTP Verification Section */}
       <View style={[styles.mb4]}>
-        <Text style={[styles.textLg, styles.fontBold, styles.textGray800, styles.mb3]}>
+        <Text style={[styles.textBase, styles.fontSemibold, styles.textGray900, styles.mb3]}>
           Patient Verification
         </Text>
         
         {isOtpVerified ? (
-          <View style={[
-            styles.p4, 
-            styles.roundedLg, 
-            styles.border,
-            { backgroundColor: colors.medical[50], borderColor: colors.medical[300] }
-          ]}>
+          <View style={[styles.p4, styles.roundedLg, { backgroundColor: colors.medical[50] }]}>
             <View style={[styles.flexRow, styles.alignCenter, styles.justifyCenter]}>
-              <MaterialCommunityIcons name="check-circle" size={24} color={colors.medical[600]} style={[styles.mr2]} />
-              <Text style={[styles.textBase, styles.fontBold, styles.textMedical600]}>
+              <MaterialCommunityIcons name="check-circle" size={20} color={colors.medical[600]} style={[styles.mr2]} />
+              <Text style={[styles.textSm, styles.fontMedium, styles.textGray800]}>
                 Patient Verified
               </Text>
             </View>
-            <Text style={[styles.textCenter, styles.textSm, styles.textGray600, styles.mt1]}>
+            <Text style={[styles.textCenter, styles.textXs, styles.textGray600, styles.mt1]}>
               OTP verification completed
             </Text>
           </View>
         ) : (
-          <View style={[styles.p4, styles.roundedLg, styles.border,
-            { backgroundColor: colors.warning[50], borderColor: colors.warning[200] }]}>
+          <View style={[styles.p4, styles.roundedLg, { backgroundColor: colors.gray[50] }]}>
             <View style={[styles.mb3]}>
               <Text style={[styles.textSm, styles.fontMedium, styles.textGray700, styles.mb2]}>
                 Verify patient with 4-digit OTP:
               </Text>
               <View style={[styles.flexRow, styles.alignCenter, styles.gap2]}>
-                <TextInput style={[styles.flex1, styles.py3, styles.px4, styles.border, styles.borderGray300,
-                styles.roundedLg, styles.textCenter, styles.textLg, styles.fontBold, { backgroundColor: colors.gray[50]}]}
+                <TextInput style={[styles.flex1, styles.py3, styles.px4, styles.roundedLg, styles.textCenter, styles.textBase, styles.fontMedium, { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray[200] }]}
                   value={otpInput}
                   onChangeText={setOtpInput}
                   placeholder="Enter OTP"
@@ -366,11 +315,10 @@ function AcceptedRideInfo({
                   maxLength={4}
                   textAlign="center"
                 />
-                <TouchableOpacity style={[styles.py3, styles.px4, styles.roundedLg,
-                    { backgroundColor: colors.warning[500] }]}
+                <TouchableOpacity style={[styles.py3, styles.px4, styles.roundedLg, { backgroundColor: colors.primary[600] }]}
                   onPress={handleOtpVerification}
                   disabled={otpInput.length !== 4}>
-                  <Text style={[styles.textBase, styles.fontBold, styles.textWhite]}>
+                  <Text style={[styles.textSm, styles.fontMedium, styles.textWhite]}>
                     Verify
                   </Text>
                 </TouchableOpacity>
@@ -384,9 +332,9 @@ function AcceptedRideInfo({
       </View>
 
       {/* Quick Action Buttons */}
-      <View style={[styles.flexRow, styles.gap3, styles.mb4]}>
-        <TouchableOpacity style={[styles.flex1, styles.py3, styles.roundedLg, styles.alignCenter,
-            styles.border, styles.borderGray300, { backgroundColor: colors.gray[50] }]}
+      <View style={[styles.mb4]}>
+        <TouchableOpacity style={[styles.w100, styles.py3, styles.roundedLg, styles.alignCenter,
+            { backgroundColor: colors.gray[50] }]}
           onPress={handlePhoneCall} activeOpacity={0.7}>
           <View style={[styles.flexRow, styles.alignCenter]}>
             <MaterialIcons name="phone" size={18} color={colors.gray[700]} style={[styles.mr2]} />
@@ -395,25 +343,14 @@ function AcceptedRideInfo({
             </Text>
           </View>
         </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.flex1, styles.py3, styles.roundedLg, styles.alignCenter,
-            { backgroundColor: colors.primary[500] }]} onPress={handleDirections} activeOpacity={0.8}>
-          <View style={[styles.flexRow, styles.alignCenter]}>
-            <MaterialCommunityIcons name="navigation" size={18} color="white" style={[styles.mr2]} />
-            <Text style={[styles.textSm, styles.fontBold, styles.textWhite]}>
-              Navigate
-            </Text>
-          </View>
-        </TouchableOpacity>
       </View>
 
       {/* Emergency Contact Info */}
-      <View style={[styles.p3, styles.roundedLg, styles.border,
-        { backgroundColor: colors.emergency[50], borderColor: colors.emergency[200] }]}> 
+      <View style={[styles.p3, styles.roundedLg, { backgroundColor: colors.gray[50] }]}> 
         <View style={[styles.flexRow, styles.alignCenter, styles.mb1]}>
           <MaterialCommunityIcons name="phone-alert" size={16} color={colors.emergency[600]} style={[styles.mr2]} />
-          <Text style={[styles.textSm, styles.fontBold, styles.textEmergency600]}>
-            EMERGENCY CONTACT
+          <Text style={[styles.textSm, styles.fontMedium, styles.textGray800]}>
+            Emergency Contact
           </Text>
         </View>
         <Text style={[styles.textBase, styles.textGray800]}>

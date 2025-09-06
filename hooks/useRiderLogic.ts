@@ -504,14 +504,20 @@ export const useRiderLogic = () => {
       });
 
       if (data.ride) {
-        Alert.alert("Success", `Ride status updated to ${status}`);
+        // Only show success alert for intermediate status updates, not for completion
+        if (status !== RideStatus.COMPLETED) {
+          Alert.alert("Success", `Ride status updated to ${status}`);
+        }
+        
         setAcceptedRide(data.ride);
 
         if (status === RideStatus.COMPLETED) {
+          // Clear all ride-related state
           setAcceptedRide(null);
           setDestination(null);
           setRouteCoords([]);
           setTripStarted(false);
+          setNavigationStage('idle');
           
           // Refresh everything after completion with delay to prevent re-render loops
           setTimeout(() => {
@@ -531,7 +537,7 @@ export const useRiderLogic = () => {
     } finally {
       setLoading(false);
     }
-  }, [makeAuthenticatedRequest, handleApiError, fetchDriverStats]);
+  }, [makeAuthenticatedRequest, handleApiError, fetchDriverStats, fetchAvailableRides]);
 
   const handleRejectRide = useCallback((rideId: string) => {
     setAvailableRides(prev => prev.filter(r => r._id !== rideId));
@@ -720,7 +726,7 @@ export const useRiderLogic = () => {
       if (stage === 'pickup' && acceptedRide) {
         // Update ride status to 'START' and start trip
         await updateRideStatus(acceptedRide._id, RideStatus.START);
-        setTripStarted(true);
+        // Note: setTripStarted(true) is already handled in updateRideStatus
         setNavigationStage('to_hospital');
         
         // Persist the updated trip state
@@ -731,16 +737,28 @@ export const useRiderLogic = () => {
           await startNavigation(acceptedRide.drop, 'to_hospital');
         }
       } else if (stage === 'dropoff' && acceptedRide) {
-        // Complete the ride
+        // Complete the ride - let updateRideStatus handle the state cleanup
         await updateRideStatus(acceptedRide._id, RideStatus.COMPLETED);
-        setTripStarted(false);
-        setAcceptedRide(null);
+        
+        // Clear navigation state
         stopNavigation();
+        setNavigationStage('idle');
         
         // Clear persisted ride data
         await clearPersistedRide();
         
-        Alert.alert('Trip Completed', 'Ride has been completed successfully!');
+        Alert.alert('Trip Completed', 'Ride has been completed successfully!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Additional cleanup to ensure dashboard state is correct
+              setTripStarted(false);
+              setAcceptedRide(null);
+              setDestination(null);
+              setRouteCoords([]);
+            }
+          }
+        ]);
       }
     } catch (error) {
       console.error('Stage completion error:', error);
