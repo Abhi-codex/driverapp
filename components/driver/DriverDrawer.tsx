@@ -31,9 +31,15 @@ interface DriverDrawerProps {
   isNavigating?: boolean;
   navigationStage?: 'idle' | 'to_patient' | 'to_hospital';
   currentRoute?: any;
+  navigationMode?: 'in-app' | 'external';
   onNavigationStart?: (destination: { latitude: number; longitude: number }, stage: 'to_patient' | 'to_hospital') => void;
   onNavigationStop?: () => void;
   onStageComplete?: (stage: 'pickup' | 'dropoff') => void;
+  onToggleNavigationMode?: () => void;
+  
+  // Cancel ride props
+  onCancelRide?: (rideId: string, reason: string) => Promise<void>;
+  onCheckCanCancel?: (rideId: string) => Promise<any>;
 }
 
 export default function DriverDrawer({
@@ -56,9 +62,13 @@ export default function DriverDrawer({
   isNavigating = false,
   navigationStage = 'idle',
   currentRoute = null,
+  navigationMode = 'external',
   onNavigationStart,
   onNavigationStop,
   onStageComplete,
+  onToggleNavigationMode,
+  onCancelRide,
+  onCheckCanCancel,
 }: DriverDrawerProps) {
   const drawerStyle = useAnimatedStyle(() => {
     return {
@@ -124,9 +134,13 @@ export default function DriverDrawer({
           isNavigating={isNavigating}
           navigationStage={navigationStage}
           currentRoute={currentRoute}
+          navigationMode={navigationMode}
           onNavigationStart={onNavigationStart}
           onNavigationStop={onNavigationStop}
           onStageComplete={onStageComplete}
+          onToggleNavigationMode={onToggleNavigationMode}
+          onCancelRide={onCancelRide}
+          onCheckCanCancel={onCheckCanCancel}
         />
       )}
     </Animated.View>

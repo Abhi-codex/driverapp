@@ -30,6 +30,9 @@ export default {
       },
       infoPlist: {
         NSLocationWhenInUseUsageDescription: "This app uses location to show your position on the map and to help you find rides nearby.",
+        NSLocationAlwaysAndWhenInUseUsageDescription: "This app needs background location access to notify you of nearby emergency requests even when the app is closed.",
+        NSLocationAlwaysUsageDescription: "This app needs background location access to notify you of nearby emergency requests even when the app is closed.",
+        UIBackgroundModes: ["location", "background-fetch", "remote-notification"],
         ITSAppUsesNonExemptEncryption: false
       }
     },
@@ -41,9 +44,13 @@ export default {
         "android.permission.READ_SMS",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.CALL_PHONE"
+        "android.permission.CALL_PHONE",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.WAKE_LOCK"
       ],
       config: {
         googleMaps: {
@@ -65,7 +72,23 @@ export default {
     plugins: [
       "expo-location",
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/images/logo.png",
+          color: "#0066CC",
+          sounds: ["./assets/sounds/notification.wav"],
+          mode: "production"
+        }
+      ],
+      [
+        "expo-background-fetch",
+        {
+          backgroundFetchInterval: 60
+        }
+      ],
+      "expo-task-manager"
     ],
     experiments: {
       typedRoutes: true

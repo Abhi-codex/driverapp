@@ -2,7 +2,8 @@ export enum RideStatus {
   SEARCHING = "SEARCHING_FOR_RIDER",
   START = "START",
   ARRIVED = "ARRIVED",
-  COMPLETED = "COMPLETED"
+  COMPLETED = "COMPLETED",
+  CANCELLED = "CANCELLED"
 }
 
 export enum AmbulanceType {
@@ -84,6 +85,13 @@ export type Ride = {
     emergencyCapabilityScore: number;
     emergencyFeatures: string[];
     isEmergencyVerified: boolean;
+  };
+  // Cancellation details
+  cancellation?: {
+    cancelledBy: 'patient' | 'driver' | 'system';
+    cancelledAt: string;
+    cancelReason: string;
+    cancellationFee: number;
   };
 };
 

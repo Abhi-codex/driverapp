@@ -102,7 +102,7 @@
             vehicleType: profileData.vehicle?.type || '',
             plateNumber: profileData.vehicle?.plateNumber || '',
             model: profileData.vehicle?.model || '',
-            certificationLevel: profileData.certificationLevel || '',
+            certificationLevel: profileData.vehicle?.certificationLevel || '',
             hospitalAffiliation: profileData.hospitalAffiliation || {
               isAffiliated: false,
               hospitalName: '',
@@ -231,6 +231,24 @@
       setSaving(true);
       try {
         let token = await AsyncStorage.getItem('access_token');
+        
+        // Structure the data properly to match DriverProfile interface
+        const profileData = {
+          name: editForm.name,
+          email: editForm.email,
+          vehicle: {
+            type: editForm.vehicleType,
+            plateNumber: editForm.plateNumber,
+            model: editForm.model,
+            licenseNumber: editForm.licenseNumber,
+            certificationLevel: editForm.certificationLevel,
+          },
+          hospitalAffiliation: editForm.hospitalAffiliation,
+          profileCompleted: true
+        };
+
+        console.log('[PROFILE] Sending structured profile data:', profileData);
+        
         // Use JWT access token for profile update
         const response = await fetch(`${getServerUrl()}/driver/profile`, {
           method: 'PUT',
@@ -238,17 +256,27 @@
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({
-            ...editForm,
-            profileCompleted: true
-          })
+          body: JSON.stringify(profileData)
         });
       
         if (response.ok) {
           Alert.alert('Success', 'Profile updated successfully');
           setEditModalVisible(false);
-          // Save to local storage too
-          await AsyncStorage.setItem('driver_profile', JSON.stringify(editForm));
+          // Save structured data to local storage
+          const updatedProfile = {
+            ...driverProfile,
+            name: editForm.name,
+            email: editForm.email,
+            vehicle: {
+              type: editForm.vehicleType,
+              plateNumber: editForm.plateNumber,
+              model: editForm.model,
+              licenseNumber: editForm.licenseNumber,
+              certificationLevel: editForm.certificationLevel,
+            },
+            hospitalAffiliation: editForm.hospitalAffiliation,
+          };
+          await AsyncStorage.setItem('driver_profile', JSON.stringify(updatedProfile));
           await fetchDriverData(); // Refresh profile data
         } else {
           console.error('[PROFILE] Profile update failed:', response.status);

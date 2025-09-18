@@ -8,12 +8,26 @@ interface DriveProps {
   availableRidesCount?: number;
   hasActiveRide?: boolean;
   isTrip?: boolean;
+  isSocketConnected?: boolean;
+  acceptedRide?: any;
   onPress: () => void;
 }
 
-const Drive: React.FC<DriveProps> = ({ isOnline, availableRidesCount = 0, hasActiveRide = false, isTrip = false, onPress }) => {
+const Drive: React.FC<DriveProps> = ({ 
+  isOnline, 
+  availableRidesCount = 0, 
+  hasActiveRide = false, 
+  isTrip = false, 
+  isSocketConnected = false,
+  acceptedRide,
+  onPress 
+}) => {
   const getButtonText = () => {
     if (hasActiveRide) {
+      // Check if ride is cancelled
+      if (acceptedRide?.status === 'CANCELLED') {
+        return 'Ride Cancelled';
+      }
       return isTrip ? 'Continue to Hospital' : 'Go to Patient';
     }
     return isOnline ? 'Start Driving' : 'Go Online First';
@@ -21,6 +35,15 @@ const Drive: React.FC<DriveProps> = ({ isOnline, availableRidesCount = 0, hasAct
 
   const getButtonSubtext = () => {
     if (hasActiveRide) {
+      // Handle cancelled rides
+      if (acceptedRide?.status === 'CANCELLED') {
+        const cancelledBy = acceptedRide?.cancellation?.cancelledBy;
+        const reason = acceptedRide?.cancellation?.cancelReason;
+        return cancelledBy === 'patient' 
+          ? `Cancelled by patient${reason ? `: ${reason}` : ''}` 
+          : `Cancelled${reason ? `: ${reason}` : ''}`;
+      }
+      
       return isTrip 
         ? 'You have a patient onboard. Navigate to hospital.' 
         : 'You have an accepted ride. Navigate to patient pickup.';
@@ -32,13 +55,36 @@ const Drive: React.FC<DriveProps> = ({ isOnline, availableRidesCount = 0, hasAct
 
   const getButtonColor = () => {
     if (hasActiveRide) {
+      // Handle cancelled rides
+      if (acceptedRide?.status === 'CANCELLED') {
+        return styles.bgGray500; // Grey for cancelled rides
+      }
       return isTrip ? styles.bgSecondary600 : styles.bgPrimary600;
     }
     return styles.bgEmergency500;
   };
 
   return (
-    <TouchableOpacity
+    <>
+      {/* Real-time connection status indicator */}
+      {isOnline && (
+        <View style={[styles.flexRow, styles.alignCenter, styles.justifyCenter, styles.mb3]}>
+          <View 
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: isSocketConnected ? '#10B981' : '#EF4444',
+              marginRight: 8
+            }}
+          />
+          <Text style={[styles.textXs, styles.textGray600]}>
+            {isSocketConnected ? 'Real-time updates active' : 'Connecting...'}
+          </Text>
+        </View>
+      )}
+      
+      <TouchableOpacity
       style={[
         getButtonColor(), 
         styles.rounded2xl, 
@@ -87,6 +133,7 @@ const Drive: React.FC<DriveProps> = ({ isOnline, availableRidesCount = 0, hasAct
         </View>
       )}
     </TouchableOpacity>
+    </>
   );
 };
 

@@ -124,9 +124,9 @@ export class NavigationService {
   ): Promise<void> {
     try {
       if (Platform.OS === 'ios') {
-        await this.startIOSNavigation(destination, options);
+        await this.startIOSNavigation(destination, undefined, options);
       } else {
-        await this.startAndroidNavigation(destination, options);
+        await this.startAndroidNavigation(destination, undefined, options);
       }
       this.isNavigating = true;
     } catch (error) {
@@ -168,12 +168,18 @@ export class NavigationService {
    */
   private async startIOSNavigation(
     destination: { latitude: number; longitude: number },
+    origin?: { latitude: number; longitude: number },
     options: NavigationOptions = {}
   ): Promise<void> {
     const { latitude, longitude } = destination;
     
     // Try Google Maps first if installed
-    const googleMapsUrl = `comgooglemaps://?daddr=${latitude},${longitude}&directionsmode=driving`;
+    let googleMapsUrl: string;
+    if (origin) {
+      googleMapsUrl = `comgooglemaps://?saddr=${origin.latitude},${origin.longitude}&daddr=${latitude},${longitude}&directionsmode=driving`;
+    } else {
+      googleMapsUrl = `comgooglemaps://?daddr=${latitude},${longitude}&directionsmode=driving`;
+    }
     const canOpenGoogleMaps = await Linking.canOpenURL(googleMapsUrl);
     
     if (canOpenGoogleMaps) {
@@ -198,12 +204,19 @@ export class NavigationService {
    */
   private async startAndroidNavigation(
     destination: { latitude: number; longitude: number },
+    origin?: { latitude: number; longitude: number },
     options: NavigationOptions = {}
   ): Promise<void> {
     const { latitude, longitude } = destination;
     
     // Try Google Maps navigation intent
-    const googleMapsUrl = `google.navigation:q=${latitude},${longitude}&mode=d`;
+    let googleMapsUrl: string;
+    if (origin) {
+      // Use directions API format with origin and destination
+      googleMapsUrl = `https://www.google.com/maps/dir/${origin.latitude},${origin.longitude}/${latitude},${longitude}`;
+    } else {
+      googleMapsUrl = `google.navigation:q=${latitude},${longitude}&mode=d`;
+    }
     const canOpenGoogleMaps = await Linking.canOpenURL(googleMapsUrl);
     
     if (canOpenGoogleMaps) {
@@ -221,6 +234,52 @@ export class NavigationService {
     }
 
     throw new Error('No navigation app available');
+  }
+
+  /**
+   * Launch external navigation (Google Maps/Apple Maps)
+   */
+  public async launchExternalNavigation(
+    origin: { latitude: number; longitude: number },
+    destination: { latitude: number; longitude: number },
+    stage: 'to_patient' | 'to_hospital'
+  ): Promise<boolean> {
+    try {
+      console.log(`🚀 Launching external navigation for ${stage}`);
+      
+      if (Platform.OS === 'ios') {
+        await this.startIOSNavigation(destination, origin);
+      } else {
+        await this.startAndroidNavigation(destination, origin);
+      }
+      
+      // Show return reminder
+      setTimeout(() => {
+        Alert.alert(
+          'Navigation Started',
+          `External navigation opened for ${stage === 'to_patient' ? 'patient pickup' : 'hospital delivery'}.\n\nPlease return to InstaAid when you reach your destination.`,
+          [
+            { 
+              text: 'OK',
+              onPress: () => console.log('User acknowledged external navigation')
+            }
+          ]
+        );
+      }, 1500);
+      
+      return true;
+    } catch (error) {
+      console.error('External navigation failed:', error);
+      Alert.alert(
+        'Navigation Error',
+        'Could not open external navigation app. Please check if Google Maps or Apple Maps is installed.',
+        [
+          { text: 'Try Again', onPress: () => this.showNavigationOptions(destination) },
+          { text: 'Cancel' }
+        ]
+      );
+      return false;
+    }
   }
 
   /**

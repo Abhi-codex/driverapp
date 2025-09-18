@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { ScrollView, View, Text, TouchableOpacity } from "react-native";
+import { ScrollView, View, Text, TouchableOpacity, Alert } from "react-native";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { styles, colors } from "../../constants/tailwindStyles";
 import { Ride, DriverStats } from "../../types/rider";
@@ -8,6 +8,7 @@ import AvailableRidesList from "./AvailableRidesList";
 import NoRidesAvailable from "./NoRidesAvailable";
 import DriverControlPanel from "./DriverControlPanel";
 import DriverQuickStats from "./DriverQuickStats";
+import NavigationModeToggle from "./NavigationModeToggle";
 
 interface DriverDrawerContentProps {
   currentSnapPoint: "MINIMIZED" | "PARTIAL" | "FULL";
@@ -30,9 +31,15 @@ interface DriverDrawerContentProps {
   isNavigating?: boolean;
   navigationStage?: 'idle' | 'to_patient' | 'to_hospital';
   currentRoute?: any;
+  navigationMode?: 'in-app' | 'external';
   onNavigationStart?: (destination: { latitude: number; longitude: number }, stage: 'to_patient' | 'to_hospital') => void;
   onNavigationStop?: () => void;
   onStageComplete?: (stage: 'pickup' | 'dropoff') => void;
+  onToggleNavigationMode?: () => void;
+  
+  // Cancel ride props
+  onCancelRide?: (rideId: string, reason: string) => Promise<void>;
+  onCheckCanCancel?: (rideId: string) => Promise<any>;
 }
 
 export default function DriverDrawerContent({
@@ -53,9 +60,13 @@ export default function DriverDrawerContent({
   isNavigating = false,
   navigationStage = 'idle',
   currentRoute = null,
+  navigationMode = 'external',
   onNavigationStart,
   onNavigationStop,
   onStageComplete,
+  onToggleNavigationMode,
+  onCancelRide,
+  onCheckCanCancel,
 }: DriverDrawerContentProps) {
   // Navigation state management
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -65,6 +76,69 @@ export default function DriverDrawerContent({
   const totalSteps = currentRoute?.steps?.length || 0;
   const progressPercent = totalSteps > 0 ? ((currentStepIndex + 1) / totalSteps) * 100 : 0;
   const currentStep = currentRoute?.steps?.[currentStepIndex];
+
+  // Handle cancel ride
+  const handleCancelRide = useCallback(async () => {
+    if (!acceptedRide || !onCancelRide || !onCheckCanCancel) return;
+
+    try {
+      // First check if cancellation is allowed
+      const canCancelResult = await onCheckCanCancel(acceptedRide._id);
+      
+      if (!canCancelResult?.canCancel) {
+        Alert.alert(
+          'Cannot Cancel',
+          canCancelResult?.message || 'This ride cannot be cancelled at this time.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Show cancellation options
+      Alert.alert(
+        'Cancel Ride',
+        `Are you sure you want to cancel this ride?${canCancelResult.cancellationFee > 0 ? `\n\nNote: Patient will be charged ₹${canCancelResult.cancellationFee} cancellation fee.` : ''}`,
+        [
+          { text: 'Keep Ride', style: 'cancel' },
+          {
+            text: 'Cancel Ride',
+            style: 'destructive',
+            onPress: () => showCancelReasonDialog()
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to check cancellation eligibility');
+    }
+  }, [acceptedRide, onCancelRide, onCheckCanCancel]);
+
+  // Show cancel reason dialog
+  const showCancelReasonDialog = useCallback(() => {
+    if (!acceptedRide || !onCancelRide) return;
+
+    Alert.alert(
+      'Cancel Reason',
+      'Please select a reason for cancellation:',
+      [
+        { text: 'Emergency resolved', onPress: () => processCancellation('Emergency resolved by patient') },
+        { text: 'Unable to reach location', onPress: () => processCancellation('Driver unable to reach pickup location') },
+        { text: 'Vehicle breakdown', onPress: () => processCancellation('Vehicle breakdown - technical issue') },
+        { text: 'Other reason', onPress: () => processCancellation('Other - driver initiated cancellation') },
+        { text: 'Back', style: 'cancel' }
+      ]
+    );
+  }, [acceptedRide, onCancelRide]);
+
+  // Process the cancellation
+  const processCancellation = useCallback(async (reason: string) => {
+    if (!acceptedRide || !onCancelRide) return;
+
+    try {
+      await onCancelRide(acceptedRide._id, reason);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to cancel ride. Please try again.');
+    }
+  }, [acceptedRide, onCancelRide]);
 
   // Format distance for display
   const formatDistance = useCallback((distance: string | number) => {
@@ -371,6 +445,14 @@ export default function DriverDrawerContent({
                   </View>
                 </View>
 
+                {/* Navigation Mode Toggle */}
+                {onToggleNavigationMode && (
+                  <NavigationModeToggle
+                    navigationMode={navigationMode}
+                    onToggle={onToggleNavigationMode}
+                  />
+                )}
+
                 <TouchableOpacity
                   onPress={() => {
                     const destination = navigationStage === 'to_patient' || !tripStarted 
@@ -385,6 +467,34 @@ export default function DriverDrawerContent({
                     Start Navigation
                   </Text>
                 </TouchableOpacity>
+
+                {/* Cancel Ride Button */}
+                {onCancelRide && (
+                  <TouchableOpacity
+                    onPress={handleCancelRide}
+                    style={[
+                      styles.w100, 
+                      styles.py3, 
+                      styles.px4, 
+                      styles.roundedLg, 
+                      styles.alignCenter, 
+                      styles.mt2,
+                      { backgroundColor: colors.danger[600], borderWidth: 1, borderColor: colors.danger[500] }
+                    ]}
+                  >
+                    <View style={[styles.flexRow, styles.alignCenter]}>
+                      <MaterialCommunityIcons 
+                        name="close-circle" 
+                        size={16} 
+                        color="white" 
+                        style={styles.mr1} 
+                      />
+                      <Text style={[styles.fontMedium, styles.textWhite, styles.textSm]}>
+                        Cancel Ride
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
               </View>
             )
           )}

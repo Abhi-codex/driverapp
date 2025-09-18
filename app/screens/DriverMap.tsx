@@ -1,8 +1,8 @@
 import DriverDrawer from "../../components/driver/DriverDrawer";
 import DriverMap from "../../components/driver/DriverMap";
 import * as Location from "expo-location";
-import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Dimensions, StatusBar, Text, View, TouchableOpacity, BackHandler } from "react-native";
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import { ActivityIndicator, Alert, Dimensions, StatusBar, Text, View, TouchableOpacity, BackHandler, AppState } from "react-native";
 import { runOnJS, useAnimatedGestureHandler, useSharedValue, withSpring } from "react-native-reanimated";
 import { colors, styles } from "../../constants/tailwindStyles";
 import { useRiderLogic } from "../../hooks/useRiderLogic";
@@ -47,8 +47,30 @@ export default function DriverMapScreen() {
     handleStageComplete,
     isNavigating,
     navigationStage,
-    currentRoute
+    currentRoute,
+    navigationMode,
+    toggleNavigationMode,
+    cancelRide,
+    canCancelRide
   } = useRiderLogic(); // Remove driverLocation parameter to prevent continuous refresh
+
+  // Wrapper functions to bridge interface differences
+  const handleNavigationStart = useCallback((
+    destination: { latitude: number; longitude: number }, 
+    stage: 'to_patient' | 'to_hospital'
+  ) => {
+    if (driverLocation) {
+      startNavigation(destination, stage, driverLocation);
+    } else {
+      Alert.alert('Location Error', 'Driver location is required to start navigation');
+    }
+  }, [startNavigation, driverLocation]);
+
+  const handleStageCompleteWrapper = useCallback((stage: 'pickup' | 'dropoff') => {
+    // Map component stage types to hook stage types
+    const mappedStage = stage === 'pickup' ? 'patient_pickup' : 'hospital_arrival';
+    handleStageComplete(mappedStage as 'patient_pickup' | 'hospital_arrival');
+  }, [handleStageComplete]);
 
   // Auto-expand drawer when ride is accepted
   useEffect(() => {
@@ -199,7 +221,7 @@ export default function DriverMapScreen() {
   const initializeLocationTracking = React.useCallback(async () => {
     try {
       setLoading(true);
-      console.log('🎯 Starting location initialization...');
+      console.log('Starting location initialization...');
       
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
@@ -215,7 +237,7 @@ export default function DriverMapScreen() {
         return;
       }
 
-      console.log('📍 Location permission granted, getting current position...');
+      console.log('Location permission granted, getting current position...');
       
       // Get initial position
       const currentLocation = await Location.getCurrentPositionAsync({
@@ -229,37 +251,44 @@ export default function DriverMapScreen() {
         longitudeDelta: 0.01,
       };
       
-      console.log('📍 Initial location set:', newRegion);
+      console.log('Initial location set:', newRegion);
       setDriverLocation(newRegion);
       updateDriverLocation(newRegion); // Update the hook's location
       setLoading(false);
 
-      // Start watching position with optimized settings
+      // Start watching position with high-precision settings for accurate markers
       const subscription = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.Balanced, // Changed from High to Balanced
-          timeInterval: 10000, // Update every 10 seconds instead of 5
-          distanceInterval: 50, // Update when moved 50 meters instead of 20
+          accuracy: Location.Accuracy.BestForNavigation, // Highest accuracy for precise markers
+          timeInterval: 3000, // Update every 3 seconds for real-time precision
+          distanceInterval: 5, // Update when moved 5 meters for fine-grained tracking
         },
         (location) => {
+          // Use higher precision coordinates (8 decimal places ≈ 1.1 meter accuracy)
           const updatedRegion = {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
+            latitude: Number(location.coords.latitude.toFixed(8)),
+            longitude: Number(location.coords.longitude.toFixed(8)),
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
           };
-          // Reduced logging frequency
-          // console.log('📍 Location updated:', updatedRegion);
+          
+          console.log('📍 High-precision location update:', {
+            lat: updatedRegion.latitude,
+            lng: updatedRegion.longitude,
+            accuracy: location.coords.accuracy,
+            timestamp: new Date().toISOString()
+          });
+          
           setDriverLocation(updatedRegion);
           updateDriverLocation(updatedRegion); // Update the hook's location
         }
       );
 
       setLocationSubscription(subscription);
-      console.log('✅ Location tracking initialized successfully');
+      console.log('Location tracking initialized successfully');
     } 
     catch (error) {
-      console.error("❌ Error getting location:", error);
+      console.error("Error getting location:", error);
       Alert.alert(
         "Location Error",
         "Unable to get your current location. Please check your location settings.",
@@ -302,6 +331,39 @@ export default function DriverMapScreen() {
       );
     }
   }, [online, loading, toggleOnline, router]);
+
+  // Handle app state changes to detect when returning from external navigation
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active' && acceptedRide && driverLocation) {
+        console.log('App resumed - checking navigation state');
+        
+        // Check if we need to resume navigation based on ride status and navigation stage
+        if (navigationStage === 'to_hospital' && !isNavigating) {
+          console.log('Resuming navigation to hospital after external nav return');
+          
+          // Show prompt to resume navigation to hospital
+          setTimeout(() => {
+            Alert.alert(
+              'Resume Navigation',
+              'Would you like to resume navigation to the hospital?',
+              [
+                { text: 'Use In-App Navigation', onPress: () => handleNavigationStart({ latitude: acceptedRide.drop.latitude, longitude: acceptedRide.drop.longitude }, 'to_hospital') },
+                { text: 'Use Google Maps', onPress: () => {
+                  // Manually set navigation mode to external and start navigation
+                  handleNavigationStart({ latitude: acceptedRide.drop.latitude, longitude: acceptedRide.drop.longitude }, 'to_hospital');
+                }},
+                { text: 'Later' }
+              ]
+            );
+          }, 1000); // Small delay to ensure app is fully active
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [acceptedRide, driverLocation, navigationStage, isNavigating, handleNavigationStart]);
 
   if (loading) {
     return (
@@ -354,9 +416,9 @@ export default function DriverMapScreen() {
           acceptedRide={acceptedRide}
           routeCoords={routeCoords}
           tripStarted={tripStarted}
-          onNavigationStart={startNavigation}
+          onNavigationStart={handleNavigationStart}
           onNavigationStop={stopNavigation}
-          onStageComplete={handleStageComplete}
+          onStageComplete={handleStageCompleteWrapper}
           isNavigating={isNavigating}
           navigationStage={navigationStage}
           currentRoute={currentRoute}
@@ -384,9 +446,13 @@ export default function DriverMapScreen() {
           isNavigating={isNavigating}
           navigationStage={navigationStage}
           currentRoute={currentRoute}
-          onNavigationStart={startNavigation}
+          navigationMode={navigationMode}
+          onNavigationStart={handleNavigationStart}
           onNavigationStop={stopNavigation}
-          onStageComplete={handleStageComplete}
+          onStageComplete={handleStageCompleteWrapper}
+          onToggleNavigationMode={toggleNavigationMode}
+          onCancelRide={cancelRide}
+          onCheckCanCancel={canCancelRide}
         />
       )}
     </View>

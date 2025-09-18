@@ -20,7 +20,8 @@ export default function DriverDashboard() {
     availableRides, 
     fetchDriverStats,
     acceptedRide,
-    tripStarted
+    tripStarted,
+    isSocketConnected,
   } = useRiderLogic();
 
   useEffect(() => {
@@ -309,6 +310,8 @@ export default function DriverDashboard() {
           availableRidesCount={availableRides.length}
           hasActiveRide={!!acceptedRide}
           isTrip={tripStarted}
+          isSocketConnected={isSocketConnected}
+          acceptedRide={acceptedRide}
           onPress={handleNavigateToMap}
         />
       </View>

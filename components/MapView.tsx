@@ -66,6 +66,11 @@ interface MapViewWrapperProps {
   theme?: 'day' | 'night';
   showMapTypeSelector?: boolean;
   showFeatureControls?: boolean;
+  // Google Maps-like features
+  ref?: React.RefObject<any>;
+  showsMyLocationButton?: boolean;
+  loadingEnabled?: boolean;
+  onUserLocationChange?: (event: any) => void;
 }
 
 interface MarkerProps {
@@ -77,7 +82,8 @@ interface MarkerProps {
   pinColor?: string;
   onPress?: () => void;
   onCalloutPress?: () => void;
-  type?: 'driver' | 'patient' | 'hospital'; 
+  type?: 'driver' | 'patient' | 'hospital';
+  children?: React.ReactNode;
 }
 
 interface PolylineProps {
@@ -87,6 +93,7 @@ interface PolylineProps {
   }>;
   strokeColor?: string;
   strokeWidth?: number;
+  lineDashPattern?: number[];
 }
 
 const WebMapFallback: React.FC<MapViewWrapperProps> = ({ style, region, children, onPress }) => (
@@ -444,6 +451,7 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
   return (
   <View style={{ flex: 1, position: 'relative' }}>
       <MapView
+        ref={props.ref}
         provider={PROVIDER_GOOGLE}
         style={[{ flex: 1, height: '100%', width: '100%' }, props.style]}
         region={props.region}
@@ -451,7 +459,7 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
         mapType={mapType as any}
         customMapStyle={currentStyle}
         showsUserLocation={props.showsUserLocation !== false}
-        showsMyLocationButton={props.showsCompass !== false}
+        showsMyLocationButton={props.showsMyLocationButton !== false}
         showsCompass={props.showsCompass !== false}
         showsScale={props.showsScale !== false}
         showsBuildings={showsBuildings}
@@ -463,6 +471,7 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
         scrollEnabled={props.scrollEnabled !== false}
         rotateEnabled={props.rotateEnabled !== false}
         pitchEnabled={props.pitchEnabled !== false}
+        loadingEnabled={props.loadingEnabled !== false}
         zoomTapEnabled={true}
         zoomControlEnabled={true}
         mapPadding={{
@@ -477,8 +486,9 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
         toolbarEnabled={false}
         onPress={props.onPress}
         onRegionChangeComplete={props.onRegionChangeComplete}
-  onMapReady={handleMapReady}
+        onMapReady={handleMapReady}
         onError={props.onError}
+        onUserLocationChange={props.onUserLocationChange}
         onMapLoaded={() => {
           console.log('Enhanced Google Maps loaded successfully');
         }}
@@ -567,7 +577,9 @@ export const MarkerWrapper: React.FC<MarkerProps> = (props) => {
       // Custom callout styling
       calloutOffset={{ x: -8, y: 28 }}
       calloutAnchor={{ x: 0.5, y: 0.4 }}
-    />
+    >
+      {props.children}
+    </Marker>
   );
 };
 
@@ -596,7 +608,7 @@ export const PolylineWrapper: React.FC<PolylineProps> = (props) => {
         colors.primary[700],
       ]}
       // Gradient pattern for route
-      lineDashPattern={[0]}
+      lineDashPattern={props.lineDashPattern || [0]}
       fillColor="transparent"
     />
   );
