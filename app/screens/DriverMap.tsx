@@ -29,6 +29,7 @@ export default function DriverMapScreen() {
 
   const {
     online,
+    isInitialized,
     availableRides,
     acceptedRide,
     tripStarted,
@@ -272,11 +273,10 @@ export default function DriverMapScreen() {
             longitudeDelta: 0.01,
           };
           
-          console.log('📍 High-precision location update:', {
-            lat: updatedRegion.latitude,
-            lng: updatedRegion.longitude,
-            accuracy: location.coords.accuracy,
-            timestamp: new Date().toISOString()
+          console.log('📍 Location update:', {
+            lat: updatedRegion.latitude.toFixed(6), // Reduced precision for cleaner logs
+            lng: updatedRegion.longitude.toFixed(6),
+            accuracy: Math.round(location.coords.accuracy),
           });
           
           setDriverLocation(updatedRegion);
@@ -315,7 +315,8 @@ export default function DriverMapScreen() {
   
   // Check online status and redirect if offline
   useEffect(() => {
-    if (!loading && !online) {
+    // Only show the alert if the system is initialized and the user is actually offline
+    if (!loading && isInitialized && !online) {
       Alert.alert(
         'Offline Mode',
         'You are currently offline. Please go online to accept rides.',
@@ -330,7 +331,7 @@ export default function DriverMapScreen() {
         ]
       );
     }
-  }, [online, loading, toggleOnline, router]);
+  }, [online, loading, isInitialized, toggleOnline, router]);
 
   // Handle app state changes to detect when returning from external navigation
   useEffect(() => {
@@ -339,20 +340,36 @@ export default function DriverMapScreen() {
         console.log('App resumed - checking navigation state');
         
         // Check if we need to resume navigation based on ride status and navigation stage
-        if (navigationStage === 'to_hospital' && !isNavigating) {
+        if (navigationStage === 'to_hospital' && !isNavigating && acceptedRide?.drop) {
           console.log('Resuming navigation to hospital after external nav return');
+          console.log('Hospital coordinates:', acceptedRide.drop);
           
-          // Show prompt to resume navigation to hospital
+          // Show prompt to resume navigation to hospital with precise coordinates
           setTimeout(() => {
             Alert.alert(
-              'Resume Navigation',
-              'Would you like to resume navigation to the hospital?',
+              'Resume Navigation to Hospital',
+              `Continue navigation to hospital at coordinates:\nLat: ${acceptedRide.drop.latitude.toFixed(6)}\nLng: ${acceptedRide.drop.longitude.toFixed(6)}`,
               [
-                { text: 'Use In-App Navigation', onPress: () => handleNavigationStart({ latitude: acceptedRide.drop.latitude, longitude: acceptedRide.drop.longitude }, 'to_hospital') },
-                { text: 'Use Google Maps', onPress: () => {
-                  // Manually set navigation mode to external and start navigation
-                  handleNavigationStart({ latitude: acceptedRide.drop.latitude, longitude: acceptedRide.drop.longitude }, 'to_hospital');
-                }},
+                { 
+                  text: 'Use In-App Navigation', 
+                  onPress: () => {
+                    console.log('🗺️ Starting in-app navigation to hospital');
+                    handleNavigationStart({ 
+                      latitude: acceptedRide.drop.latitude, 
+                      longitude: acceptedRide.drop.longitude 
+                    }, 'to_hospital');
+                  }
+                },
+                { 
+                  text: 'Use Google Maps', 
+                  onPress: () => {
+                    console.log('🗺️ Starting Google Maps navigation to hospital');
+                    handleNavigationStart({ 
+                      latitude: acceptedRide.drop.latitude, 
+                      longitude: acceptedRide.drop.longitude 
+                    }, 'to_hospital');
+                  }
+                },
                 { text: 'Later' }
               ]
             );

@@ -74,13 +74,10 @@ const Drive: React.FC<DriveProps> = ({
               width: 8,
               height: 8,
               borderRadius: 4,
-              backgroundColor: isSocketConnected ? '#10B981' : '#EF4444',
+              backgroundColor: '#10B981',
               marginRight: 8
             }}
           />
-          <Text style={[styles.textXs, styles.textGray600]}>
-            {isSocketConnected ? 'Real-time updates active' : 'Connecting...'}
-          </Text>
         </View>
       )}
       

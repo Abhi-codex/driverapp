@@ -246,6 +246,13 @@ export class NavigationService {
   ): Promise<boolean> {
     try {
       console.log(`🚀 Launching external navigation for ${stage}`);
+      console.log('📍 Origin coordinates:', origin);
+      console.log('📍 Destination coordinates:', destination);
+      
+      // Validate coordinates before launching navigation
+      if (!destination || typeof destination.latitude !== 'number' || typeof destination.longitude !== 'number') {
+        throw new Error('Invalid destination coordinates');
+      }
       
       if (Platform.OS === 'ios') {
         await this.startIOSNavigation(destination, origin);
@@ -253,11 +260,11 @@ export class NavigationService {
         await this.startAndroidNavigation(destination, origin);
       }
       
-      // Show return reminder
+      // Show return reminder with destination coordinates
       setTimeout(() => {
         Alert.alert(
           'Navigation Started',
-          `External navigation opened for ${stage === 'to_patient' ? 'patient pickup' : 'hospital delivery'}.\n\nPlease return to InstaAid when you reach your destination.`,
+          `External navigation opened for ${stage === 'to_patient' ? 'patient pickup' : 'hospital delivery'}.\n\nDestination: ${destination.latitude.toFixed(6)}, ${destination.longitude.toFixed(6)}\n\nPlease return to InstaAid when you reach your destination.`,
           [
             { 
               text: 'OK',

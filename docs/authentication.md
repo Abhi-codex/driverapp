@@ -1,14 +1,3 @@
-# 🔐 Authentication API Documentation
-
-## Base URL
-```
-http://localhost:3000/auth
-```
-
----
-
-## 📱 Send OTP
-
 ### Endpoint
 ```
 POST /auth/send-otp
@@ -302,7 +291,3 @@ PORT=3000              # Server port
   profileCompleted: Boolean (default: false)
 }
 ```
-
----
-
-*This documentation covers the complete authentication API for the new OTP-based system.*

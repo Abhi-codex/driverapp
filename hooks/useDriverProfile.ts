@@ -9,6 +9,7 @@ import notificationService from '../utils/notificationService';
 export const useDriverProfile = () => {
   const [online, setOnline] = useState(false);
   const [driverProfile, setDriverProfile] = useState<Driver | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [driverStats, setDriverStats] = useState<DriverStats>({
     totalRides: 0,
     todayRides: 0,
@@ -21,6 +22,35 @@ export const useDriverProfile = () => {
 
   const { makeAuthenticatedRequest, handleApiError, setLoading } = useAuthenticatedRequest();
 
+  // Initialize from cache immediately
+  useEffect(() => {
+    const initializeFromCache = async () => {
+      try {
+        const cachedProfile = await AsyncStorage.getItem('driver_profile');
+        const cachedOnlineStatus = await AsyncStorage.getItem('driver_online_status');
+        
+        if (cachedProfile) {
+          const profile = JSON.parse(cachedProfile);
+          setDriverProfile(profile);
+          
+          // Use cached online status if available, otherwise use profile status
+          if (cachedOnlineStatus !== null) {
+            setOnline(JSON.parse(cachedOnlineStatus));
+          } else {
+            setOnline(profile.isOnline || false);
+          }
+        }
+        
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Failed to initialize from cache:', error);
+        setIsInitialized(true);
+      }
+    };
+
+    initializeFromCache();
+  }, []);
+
   // Fetch driver profile
   const fetchDriverProfile = useCallback(async () => {
     try {
@@ -31,10 +61,16 @@ export const useDriverProfile = () => {
       
       if (data.data?.profile) {
         setDriverProfile(data.data.profile);
-        setOnline(data.data.profile.isOnline);
         
-        // Store profile for offline access
+        // Use the backend online status and sync with cache
+        const backendOnlineStatus = data.data.profile.isOnline;
+        setOnline(backendOnlineStatus);
+        
+        // Store both profile and online status in cache
         await AsyncStorage.setItem('driver_profile', JSON.stringify(data.data.profile));
+        await AsyncStorage.setItem('driver_online_status', JSON.stringify(backendOnlineStatus));
+        
+        console.log(`Profile loaded - Online status: ${backendOnlineStatus}`);
       }
     } catch (error) {
       handleApiError(error, 'Fetch driver profile');
@@ -42,10 +78,20 @@ export const useDriverProfile = () => {
       // Try to load from cache on error
       try {
         const cachedProfile = await AsyncStorage.getItem('driver_profile');
+        const cachedOnlineStatus = await AsyncStorage.getItem('driver_online_status');
+        
         if (cachedProfile) {
           const profile = JSON.parse(cachedProfile);
           setDriverProfile(profile);
-          setOnline(profile.isOnline || false);
+          
+          // Use cached online status if available
+          if (cachedOnlineStatus !== null) {
+            setOnline(JSON.parse(cachedOnlineStatus));
+          } else {
+            setOnline(profile.isOnline || false);
+          }
+          
+          console.log(`📱 Using cached profile - Online status: ${online}`);
         }
       } catch (cacheError) {
         console.error('Failed to load cached profile:', cacheError);
@@ -127,29 +173,36 @@ export const useDriverProfile = () => {
     const newOnlineState = !online;
     
     try {
+      console.log(`🔄 Toggling online status from ${online} to ${newOnlineState}`);
+      
       // Update backend first
       await updateOnlineStatus(newOnlineState);
       
-      // Update local state only if backend update succeeds
+      // Update local state and cache only if backend update succeeds
       setOnline(newOnlineState);
+      await AsyncStorage.setItem('driver_online_status', JSON.stringify(newOnlineState));
+      
+      // Update cached profile as well
+      if (driverProfile) {
+        const updatedProfile = { ...driverProfile, isOnline: newOnlineState };
+        setDriverProfile(updatedProfile);
+        await AsyncStorage.setItem('driver_profile', JSON.stringify(updatedProfile));
+      }
+      
+      console.log(`✅ Online status updated to: ${newOnlineState}`);
       
       if (newOnlineState) {
-        // Check auth state after going online
-        try {
-          const token = await AsyncStorage.getItem("access_token");
-          if (token) {
-            await makeAuthenticatedRequest(`${getServerUrl()}/driver/profile`);
-          }
-        } catch (error) {
-          console.warn('Auth check failed after going online:', error);
-        }
+        // Refresh profile after going online to sync with backend
+        setTimeout(() => {
+          fetchDriverProfile();
+        }, 1000);
       }
     } catch (error) {
       // If backend update fails, don't change local state
-      console.error('Failed to update online status:', error);
+      console.error('❌ Failed to update online status:', error);
       handleApiError(error, 'Update online status');
     }
-  }, [online, updateOnlineStatus, makeAuthenticatedRequest, handleApiError]);
+  }, [online, updateOnlineStatus, driverProfile, fetchDriverProfile, handleApiError]);
 
   // Update vehicle information
   const updateVehicleInfo = useCallback(async (vehicleData: any) => {
@@ -225,6 +278,7 @@ export const useDriverProfile = () => {
     online,
     driverProfile,
     driverStats,
+    isInitialized,
     
     // Actions
     fetchDriverProfile,

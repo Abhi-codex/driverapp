@@ -459,6 +459,21 @@ export default function DriverDrawerContent({
                       ? acceptedRide.pickup 
                       : acceptedRide.drop;
                     const stage = navigationStage === 'to_patient' || !tripStarted ? 'to_patient' : 'to_hospital';
+                    
+                    // Enhanced logging for hospital navigation
+                    if (stage === 'to_hospital') {
+                      console.log('🏥 Starting navigation to hospital:');
+                      console.log('Hospital coordinates:', destination);
+                      console.log('Trip started:', tripStarted);
+                      console.log('Navigation stage:', navigationStage);
+                    }
+                    
+                    // Ensure destination exists before starting navigation
+                    if (!destination) {
+                      Alert.alert('Navigation Error', `${stage === 'to_patient' ? 'Patient pickup' : 'Hospital'} location is not available.`);
+                      return;
+                    }
+                    
                     onNavigationStart(destination, stage);
                   }}
                   style={[styles.w100, styles.py3, styles.px4, styles.roundedLg, styles.alignCenter, { backgroundColor: colors.primary[600] }]}

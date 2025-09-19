@@ -84,8 +84,12 @@ function DriverMap({
   ]);
 
   const stableAvailableRides = useMemo(() => {
-    if (!availableRides || availableRides.length === 0) return [];
-    return availableRides
+    if (!availableRides || availableRides.length === 0) {
+      console.log('📍 DriverMap: No available rides');
+      return [];
+    }
+    
+    const filteredRides = availableRides
       .filter(ride => ride?._id && ride?.pickup && ride?.drop)
       .map(ride => ({
         _id: ride._id,
@@ -99,6 +103,14 @@ function DriverMap({
         },
         vehicle: ride.vehicle
       }));
+    
+    console.log('📍 DriverMap: Updated available rides for markers', {
+      total: availableRides.length,
+      validRides: filteredRides.length,
+      rideIds: filteredRides.map(r => r._id)
+    });
+    
+    return filteredRides;
   }, [
     availableRides?.length || 0,
     // Create stable string dependency using JSON.stringify on IDs only

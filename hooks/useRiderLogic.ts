@@ -14,8 +14,9 @@ export const useRiderLogic = () => {
   const { makeAuthenticatedRequest, handleApiError } = useAuthenticatedRequest();
   
   const {
-    socket,
     isSocketConnected,
+    connectSocket,
+    disconnectSocket,
     reconnectSocket
   } = useSocketConnection({
     onRideUpdate: (ride) => updateRideInList(ride),
@@ -26,6 +27,7 @@ export const useRiderLogic = () => {
     driverProfile,
     driverStats,
     online,
+    isInitialized,
     fetchDriverProfile,
     fetchDriverStats,
     fetchDriverRideHistory,
@@ -42,7 +44,8 @@ export const useRiderLogic = () => {
     startNavigation,
     stopNavigation,
     toggleNavigationMode,
-    saveNavigationPreference
+    saveNavigationPreference,
+    setNavigationStage
   } = useNavigation();
 
   const {
@@ -54,6 +57,7 @@ export const useRiderLogic = () => {
     fetchAvailableRides,
     handleAcceptRide,
     updateRideStatus,
+    verifyPickup,
     handleRejectRide,
     canCancelRide,
     cancelRide,
@@ -67,6 +71,8 @@ export const useRiderLogic = () => {
   const [routeCoords, setRouteCoords] = useState<Array<{ latitude: number; longitude: number }>>([]);
   // Additional state
   const [currentDriverLocation, setCurrentDriverLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  // Ref to track if real-time sync is active
+  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Enhanced driver location update with notification service integration
   const updateDriverLocation = useCallback((location: { latitude: number; longitude: number } | null) => {
@@ -77,39 +83,82 @@ export const useRiderLogic = () => {
       notificationService.updateDriverLocation(location);
     }
   }, []);
-  
-  // Auto-refresh mechanism for real-time marker sync (enhanced from old working code)
+
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    
-    if (online && !acceptedRide) {
-      console.log('Driver went online - setting up real-time ride sync');
-      
-      // Fetch rides immediately when going online
+    // Socket connections disabled - using HTTP polling instead
+  }, [driverProfile?._id, isInitialized, connectSocket, disconnectSocket]);
+  
+  // Auto-refresh mechanism for real-time ride sync
+  useEffect(() => {
+    if (online && !acceptedRide && !syncIntervalRef.current) {
       fetchAvailableRides(currentDriverLocation || undefined);
       
-      // Set up real-time auto-refresh every 5 seconds for accurate marker sync
-      interval = setInterval(() => {
+      syncIntervalRef.current = setInterval(() => {
         if (online && !acceptedRide) {
-          console.log('Real-time sync: Auto-refreshing available rides...');
           fetchAvailableRides(currentDriverLocation || undefined);
         }
-      }, 5000); // Increased frequency from 10s to 5s for real-time feel
-    } else if (!online && interval) {
-      console.log('Driver went offline - clearing real-time sync');
-      clearInterval(interval);
-      interval = null;
+      }, 5000);
+    } else if ((!online || acceptedRide) && syncIntervalRef.current) {
+      clearInterval(syncIntervalRef.current);
+      syncIntervalRef.current = null;
     }
     
     return () => {
-      if (interval) {
-        clearInterval(interval);
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+        syncIntervalRef.current = null;
       }
     };
-  }, [online, acceptedRide?._id, fetchAvailableRides, currentDriverLocation]);
+  }, [online, acceptedRide?._id]);
 
   /**
-   * Enhanced stage completion with navigation integration
+   * Monitor accepted ride status for patient cancellations
+   */
+  useEffect(() => {
+    let rideStatusInterval: any = null;
+
+    if (acceptedRide?._id && !['COMPLETED', 'CANCELLED', 'completed', 'cancelled', 'CANCELED'].includes(acceptedRide.status)) {
+      const checkRideStatus = async () => {
+        try {
+          let response;
+          try {
+            response = await makeAuthenticatedRequest(`${getServerUrl()}/ride/${acceptedRide._id}`);
+          } catch (error) {
+            response = await makeAuthenticatedRequest(`${getServerUrl()}/api/ride/${acceptedRide._id}`);
+          }
+          
+          if (response.status === 'CANCELLED' || response.status === 'cancelled' || response.status === 'CANCELED') {
+            if (rideStatusInterval) {
+              clearInterval(rideStatusInterval);
+              rideStatusInterval = null;
+            }
+            
+            const cancelledBy = response.cancellation?.cancelledBy || 'patient';
+            const reason = response.cancellation?.cancelReason || response.cancellation?.reason || 'No reason provided';
+            
+            await handleRideCancellation(response, cancelledBy, reason);
+            
+          } else if (response.status !== acceptedRide.status) {
+            updateRideInList(response);
+          }
+        } catch (error) {
+          console.error('Failed to check ride status:', error);
+        }
+      };
+      
+      rideStatusInterval = setInterval(checkRideStatus, 3000);
+      checkRideStatus();
+    }
+
+    return () => {
+      if (rideStatusInterval) {
+        clearInterval(rideStatusInterval);
+      }
+    };
+  }, [acceptedRide?._id, acceptedRide?.status, makeAuthenticatedRequest, handleRideCancellation, updateRideInList]);
+
+  /**
+   * Enhanced stage completion with proper pickup verification
    */
   const handleStageComplete = useCallback(async (stage: 'patient_pickup' | 'hospital_arrival') => {
     if (!acceptedRide || !currentDriverLocation) {
@@ -119,34 +168,64 @@ export const useRiderLogic = () => {
 
     try {
       if (stage === 'patient_pickup') {
-        // Update ride status to START
-        await updateRideStatus(acceptedRide._id, 'START' as any);
-        
-        // Start navigation to hospital
-        const hospitalDestination = {
-          latitude: acceptedRide.drop.latitude,
-          longitude: acceptedRide.drop.longitude,
-        };
-        
-        await startNavigation(hospitalDestination, 'to_hospital', currentDriverLocation);
-        
-        Alert.alert('Success', 'Patient picked up! Navigating to hospital.');
+        // For pickup completion, we need OTP verification
+        Alert.prompt(
+          'Pickup Verification',
+          'Please enter the OTP provided by the patient to verify pickup:',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+            {
+              text: 'Verify',
+              onPress: async (otp) => {
+                if (!otp || otp.length < 4) {
+                  Alert.alert('Invalid OTP', 'Please enter a valid OTP');
+                  return;
+                }
+                
+                try {
+                  await verifyPickup(acceptedRide._id, otp, currentDriverLocation);
+                  
+                  const hospitalDestination = {
+                    latitude: acceptedRide.drop.latitude,
+                    longitude: acceptedRide.drop.longitude,
+                  };
+                  
+                  setNavigationStage('to_hospital');
+                  await startNavigation(hospitalDestination, 'to_hospital', currentDriverLocation);
+                  
+                  Alert.alert(
+                    'Patient Picked Up Successfully!', 
+                    'Navigation to the hospital has started. Please deliver the patient safely.',
+                    [
+                      {
+                        text: 'Continue to Hospital',
+                        onPress: () => {}
+                      }
+                    ]
+                  );
+                } catch (error) {
+                  console.error('Pickup verification failed:', error);
+                }
+              },
+            },
+          ],
+          'plain-text',
+          '',
+          'numeric'
+        );
         
       } else if (stage === 'hospital_arrival') {
-        // Complete the ride
         await updateRideStatus(acceptedRide._id, 'COMPLETED' as any);
-        
-        // Clear navigation state
         stopNavigation();
-        
-        // Clear persisted ride data
         await clearPersistedRide();
         
         Alert.alert('Trip Completed', 'Ride has been completed successfully!', [
           {
             text: 'OK',
             onPress: () => {
-              // Additional cleanup to ensure dashboard state is correct
               setTripStarted(false);
               setAcceptedRide(null);
               setRouteCoords([]);
@@ -161,7 +240,8 @@ export const useRiderLogic = () => {
   }, [
     acceptedRide, 
     currentDriverLocation, 
-    updateRideStatus, 
+    updateRideStatus,
+    verifyPickup,
     startNavigation, 
     stopNavigation, 
     handleApiError,
@@ -193,7 +273,7 @@ export const useRiderLogic = () => {
   }, [makeAuthenticatedRequest, online, toggleOnline]);
 
   /**
-   * Clear persisted ride data (legacy function)
+   * Clear persisted ride data
    */
   const clearPersistedRide = useCallback(async () => {
     try {
@@ -220,6 +300,7 @@ export const useRiderLogic = () => {
     destination,
     tripStarted,
     online,
+    isInitialized,
     availableRides,
     acceptedRide,
     driverStats,

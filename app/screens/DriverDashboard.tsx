@@ -22,6 +22,8 @@ export default function DriverDashboard() {
     acceptedRide,
     tripStarted,
     isSocketConnected,
+    driverProfile,
+    isInitialized,
   } = useRiderLogic();
 
   useEffect(() => {
@@ -45,14 +47,14 @@ export default function DriverDashboard() {
   // Refresh driver profile when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      // Only reload if profile hasn't been loaded yet
-      if (!profileLoaded) {
+      // Only reload if profile hasn't been loaded yet and system is initialized
+      if (!profileLoaded && isInitialized) {
         loadDriverProfile();
-      } else {
+      } else if (isInitialized) {
         // If already loaded, just refresh from AsyncStorage (fast)
         refreshProfileFromStorage();
       }
-    }, [profileLoaded])
+    }, [profileLoaded, isInitialized])
   );
 
   const refreshProfileFromStorage = async () => {
@@ -66,6 +68,9 @@ export default function DriverDashboard() {
       console.log('Failed to refresh profile from storage:', error);
     }
   };
+
+  // Use driver name from profile hook when available, otherwise use local state
+  const displayName = driverProfile?.name || driverName;
 
   // Fetch stats when component mounts or when online status changes
   useEffect(() => {
@@ -266,7 +271,7 @@ export default function DriverDashboard() {
               style={[s.flexRow, s.alignCenter, s.bgPrimary100, s.px3, s.py2, s.roundedFull]}
             >
               <MaterialIcons name="person" size={20} color={colors.primary[600]} />
-              <Text style={[s.textSm, s.fontSemibold, s.textPrimary700, s.ml1]}>{driverName}</Text>
+              <Text style={[s.textSm, s.fontSemibold, s.textPrimary700, s.ml1]}>{displayName}</Text>
             </TouchableOpacity>
 
             {showMenu && (
@@ -298,15 +303,15 @@ export default function DriverDashboard() {
       <View style={[s.flex1, s.px4]}>
         {/* Welcome Header with online status toggle */}
         <WelcomeHeader 
-          driverName={driverName}
+          driverName={displayName}
           onProfilePress={() => router.push('/screens/DriverProfile')}
-          isOnline={online}
+          isOnline={isInitialized ? online : false}
           toggleOnlineStatus={toggleOnline}
         />
         
         {/* Drive Component */}
         <Drive 
-          isOnline={online}
+          isOnline={isInitialized ? online : false}
           availableRidesCount={availableRides.length}
           hasActiveRide={!!acceptedRide}
           isTrip={tripStarted}

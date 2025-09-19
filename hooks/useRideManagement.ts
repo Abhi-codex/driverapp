@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ride, RideStatus, ApiResponse, RideResponse } from '../types/rider';
@@ -19,6 +19,53 @@ export const useRideManagement = () => {
 
   // Get dependencies
   const { makeAuthenticatedRequest, handleApiError } = useAuthenticatedRequest();
+
+  /**
+   * Restore ride data from AsyncStorage
+   */
+  const restoreRideData = useCallback(async () => {
+    try {
+      console.log('🔄 Restoring ride data from AsyncStorage...');
+      const [rideData, tripStartedData] = await Promise.all([
+        AsyncStorage.getItem('accepted_ride'),
+        AsyncStorage.getItem('trip_started')
+      ]);
+
+      if (rideData) {
+        const ride = JSON.parse(rideData);
+        console.log('✅ Restored accepted ride:', ride._id);
+        setAcceptedRide(ride);
+        
+        if (ride.drop) {
+          setDestination({
+            latitude: ride.drop.latitude,
+            longitude: ride.drop.longitude,
+          });
+          console.log('✅ Restored destination from ride');
+        }
+      } else {
+        console.log('ℹ️ No accepted ride found in storage');
+      }
+
+      if (tripStartedData) {
+        const tripStartedStatus = JSON.parse(tripStartedData);
+        setTripStarted(tripStartedStatus);
+        console.log('✅ Restored trip status:', tripStartedStatus);
+      }
+    } catch (error) {
+      console.error('❌ Failed to restore ride data:', error);
+    }
+  }, []);
+
+  // Initialize ride data from AsyncStorage on mount
+  useEffect(() => {
+    const initializeRideData = async () => {
+      console.log('🔄 Initializing ride management hook...');
+      await restoreRideData();
+    };
+    
+    initializeRideData();
+  }, [restoreRideData]); // Run once on mount
 
   // Calculate distance between two coordinates using Haversine formula
   const calculateDistance = useCallback((
@@ -174,12 +221,16 @@ export const useRideManagement = () => {
       setLoading(true);
       setError(null);
       
+      console.log(`🔄 Updating ride ${rideId} status to: ${status}`);
+      
       const data: RideResponse = await makeAuthenticatedRequest(`${getServerUrl()}/ride/update/${rideId}`, {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
 
       if (data.ride) {
+        console.log(`✅ Ride status updated successfully to: ${status}`);
+        
         // Only show success alert for intermediate status updates, not for completion
         if (status !== RideStatus.COMPLETED) {
           Alert.alert("Success", `Ride status updated to ${status}`);
@@ -192,14 +243,79 @@ export const useRideManagement = () => {
           await completeRide();
         } else if (status === RideStatus.START) {
           setTripStarted(true);
+          // Persist updated ride and trip status
+          await persistRide(data.ride, true);
         } else if (status === RideStatus.ARRIVED) {
           setTripStarted(true);
+          // Persist updated ride and trip status
+          await persistRide(data.ride, true);
+        } else {
+          // Persist updated ride with current trip status
+          await persistRide(data.ride, tripStarted);
         }
       }
 
       return data.ride;
     } catch (error) {
+      console.error(`❌ Failed to update ride status to ${status}:`, error);
       handleApiError(error, 'Update ride status');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [makeAuthenticatedRequest, handleApiError]);
+
+  /**
+   * Verify pickup with OTP (from documentation)
+   */
+  const verifyPickup = useCallback(async (
+    rideId: string, 
+    otp: string, 
+    driverLocation: { latitude: number; longitude: number }
+  ) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log(`� Verifying pickup for ride ${rideId} with OTP: ${otp}`);
+      
+      const data: RideResponse = await makeAuthenticatedRequest(`${getServerUrl()}/ride/verify-pickup`, {
+        method: 'POST',
+        body: JSON.stringify({ 
+          rideId,
+          otp,
+          driverLocation 
+        }),
+      });
+
+      if (data.ride) {
+        console.log(`✅ Pickup verified successfully`);
+        Alert.alert("Success", "Pickup verified successfully!");
+        setAcceptedRide(data.ride);
+        setTripStarted(true);
+        // Persist the updated ride with trip started status
+        await persistRide(data.ride, true);
+      }
+
+      return data.ride;
+    } catch (error) {
+      console.error(`❌ Failed to verify pickup:`, error);
+      
+      // Handle specific OTP errors
+      if (error instanceof Error) {
+        if (error.message.includes('Invalid OTP')) {
+          Alert.alert("Invalid OTP", "The provided OTP is incorrect. Please check with the patient.");
+        } else if (error.message.includes('OTP expired')) {
+          Alert.alert("OTP Expired", "The OTP has expired. Please contact the patient for a new OTP.");
+        } else if (error.message.includes('Location verification failed')) {
+          Alert.alert("Location Error", "You must be within 100 meters of the pickup location to verify.");
+        } else {
+          handleApiError(error, 'Verify pickup');
+        }
+      } else {
+        handleApiError(error, 'Verify pickup');
+      }
+      
       throw error;
     } finally {
       setLoading(false);
@@ -283,31 +399,83 @@ export const useRideManagement = () => {
     cancelledBy: string, 
     message: string
   ) => {
-    console.log('❌ Processing ride cancellation:', { ride: ride._id, cancelledBy, message });
+    console.log('🚨 ========= RIDE CANCELLATION HANDLER CALLED =========');
+    console.log('❌ Processing ride cancellation:', { 
+      rideId: ride._id, 
+      cancelledBy, 
+      message,
+      currentAcceptedRide: acceptedRide?._id 
+    });
     
     // Clear local state if this is the accepted ride
     if (acceptedRide && acceptedRide._id === ride._id) {
+      console.log('✅ This is the accepted ride - processing cancellation');
+      
+      // Send immediate push notification if app is in background
+      try {
+        console.log('🔔 Attempting to send cancellation notification...');
+        const notificationService = (await import('../utils/notificationService')).default;
+        console.log('🔔 Notification service imported, ready:', notificationService.isReady());
+        
+        if (notificationService.isReady()) {
+          await notificationService.sendCancellationNotification(
+            ride._id,
+            cancelledBy,
+            message
+          );
+          console.log('🔔 Cancellation notification sent successfully');
+        } else {
+          console.warn('🔔 Notification service not ready');
+        }
+      } catch (error) {
+        console.error('❌ Failed to send cancellation notification:', error);
+      }
+      
+      console.log('🧹 Clearing ride state...');
       await clearRideState();
       
-      // Show appropriate alert based on who cancelled
-      const alertTitle = cancelledBy === 'patient' ? 'Ride Cancelled by Patient' : 'Ride Cancelled';
+      // Enhanced alert with more details and actions
+      const alertTitle = cancelledBy === 'patient' ? '🚫 Ride Cancelled by Patient' : '❌ Ride Cancelled';
       const alertMessage = cancelledBy === 'patient' 
-        ? 'The patient has cancelled this ride. You can now accept other ride requests.'
-        : message;
+        ? `The patient has cancelled this emergency ride.\n\nReason: ${message}\n\nYou can now accept other ride requests.`
+        : `Ride has been cancelled.\n\nReason: ${message}`;
       
-      Alert.alert(alertTitle, alertMessage, [
-        { text: 'OK', onPress: () => fetchAvailableRides() }
-      ]);
+      console.log('🚨 Showing cancellation alert:', { alertTitle, alertMessage });
+      Alert.alert(
+        alertTitle, 
+        alertMessage, 
+        [
+          { 
+            text: 'View Available Rides', 
+            onPress: () => {
+              console.log('👤 User chose to view available rides');
+              fetchAvailableRides();
+            }
+          },
+          { 
+            text: 'OK', 
+            style: 'default',
+            onPress: () => {
+              console.log('👤 User acknowledged cancellation');
+            }
+          }
+        ]
+      );
+    } else {
+      console.log('ℹ️ This is not the accepted ride - just removing from available rides list');
     }
     
     // Remove from available rides
+    console.log('🗑️ Removing ride from available rides list');
     setAvailableRides(prev => prev.filter(r => r._id !== ride._id));
+    console.log('🚨 ========= RIDE CANCELLATION HANDLER COMPLETED =========');
   }, [acceptedRide, fetchAvailableRides]);
 
   /**
    * Clear all ride-related state
    */
   const clearRideState = useCallback(async () => {
+    console.log('🧹 Clearing ride state...');
     setAcceptedRide(null);
     setTripStarted(false);
     setDestination(null);
@@ -316,6 +484,7 @@ export const useRideManagement = () => {
     try {
       await AsyncStorage.removeItem('accepted_ride');
       await AsyncStorage.removeItem('trip_started');
+      console.log('🧹 Cleared persisted ride data from AsyncStorage');
     } catch (error) {
       console.error('Failed to clear persisted ride data:', error);
     }
@@ -348,36 +517,6 @@ export const useRideManagement = () => {
   }, []);
 
   /**
-   * Restore ride data from AsyncStorage
-   */
-  const restoreRideData = useCallback(async () => {
-    try {
-      const [rideData, tripStartedData] = await Promise.all([
-        AsyncStorage.getItem('accepted_ride'),
-        AsyncStorage.getItem('trip_started')
-      ]);
-
-      if (rideData) {
-        const ride = JSON.parse(rideData);
-        setAcceptedRide(ride);
-        
-        if (ride.drop) {
-          setDestination({
-            latitude: ride.drop.latitude,
-            longitude: ride.drop.longitude,
-          });
-        }
-      }
-
-      if (tripStartedData) {
-        setTripStarted(JSON.parse(tripStartedData));
-      }
-    } catch (error) {
-      console.error('Failed to restore ride data:', error);
-    }
-  }, []);
-
-  /**
    * Update ride list with real-time changes
    */
   const updateRideInList = useCallback((updatedRide: Ride) => {
@@ -398,6 +537,8 @@ export const useRideManagement = () => {
     // If this is the accepted ride, update it
     if (acceptedRide && acceptedRide._id === updatedRide._id) {
       setAcceptedRide(updatedRide);
+      // Persist the updated accepted ride
+      persistRide(updatedRide, tripStarted);
     }
   }, [acceptedRide]);
 
@@ -421,6 +562,7 @@ export const useRideManagement = () => {
     fetchAvailableRides,
     handleAcceptRide,
     updateRideStatus,
+    verifyPickup,
     handleRejectRide,
     canCancelRide,
     cancelRide,

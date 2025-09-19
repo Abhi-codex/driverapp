@@ -6,6 +6,8 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Location from 'expo-location';
 
+// Note: This service uses ONLY Expo's push notification service
+// No Firebase/FCM is required or used
 const PUSH_TOKEN_KEY = 'pushToken';
 const BACKGROUND_NOTIFICATION_TASK = 'background-notification-task';
 
@@ -58,15 +60,20 @@ class NotificationService {
         return false;
       }
 
-      // Request permissions
+      // Request permissions first
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
         console.warn('🔔 Notification permissions denied');
         return false;
       }
 
-      // Get push token
-      await this.registerForPushNotifications();
+      // Try to get push token (optional - don't fail if it doesn't work)
+      try {
+        await this.registerForPushNotifications();
+      } catch (tokenError) {
+        console.warn('🔔 Push token generation failed, but continuing with local notifications:', tokenError);
+        // Continue without push token - local notifications will still work
+      }
 
       // Set up background tasks
       await this.setupBackgroundTasks();
@@ -124,18 +131,21 @@ class NotificationService {
         return existingToken;
       }
 
-      // Generate new token
-      const token = await Notifications.getExpoPushTokenAsync({
-        projectId: 'a5dae13a-8828-49d1-8f21-d8d13037fd49', 
-      });
+      // Generate new token using Expo's push service only 
+      console.log('🔔 Generating Expo push token...');
+      const token = await Notifications.getExpoPushTokenAsync();
 
       this.pushToken = token.data;
       await AsyncStorage.setItem(PUSH_TOKEN_KEY, token.data);
       
-      console.log('🔔 Generated new push token:', token.data.substring(0, 20) + '...');
+      console.log('🔔 Generated Expo push token successfully:', token.data.substring(0, 20) + '...');
       return token.data;
     } catch (error) {
-      console.error('🔔 Error getting push token:', error);
+      console.warn('🔔 Push token generation failed (continuing without remote push):', error.message);
+      
+      // For development, we'll continue without push token
+      // Local notifications will still work for testing
+      console.log('🔔 Continuing with local-only notifications for development/testing');
       return null;
     }
   }
@@ -192,16 +202,21 @@ class NotificationService {
         // The task mainly keeps the app eligible for background processing
       });
 
-      // Register background fetch
-      await BackgroundFetch.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK, {
-        minimumInterval: 60000, // 1 minute minimum
-        stopOnTerminate: false,
-        startOnBoot: true,
-      });
-
-      console.log('🔔 Background tasks registered successfully');
+      // Check if background fetch is available and register
+      const isAvailable = await BackgroundFetch.getStatusAsync();
+      if (isAvailable === BackgroundFetch.BackgroundFetchStatus.Available) {
+        await BackgroundFetch.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK, {
+          minimumInterval: 60000, // 1 minute minimum
+          stopOnTerminate: false,
+          startOnBoot: true,
+        });
+        console.log('🔔 Background tasks registered successfully');
+      } else {
+        console.log('🔔 Background fetch not available, skipping background task registration');
+      }
     } catch (error) {
-      console.error('🔔 Error setting up background tasks:', error);
+      console.warn('🔔 Background task setup failed (continuing without background tasks):', error);
+      // Continue without background tasks - main functionality will still work
     }
   }
 
@@ -271,6 +286,37 @@ class NotificationService {
       console.log(`🔔 Sent ${rideData.urgency} priority ride notification for ride:`, rideData.rideId);
     } catch (error) {
       console.error('🔔 Error sending ride notification:', error);
+    }
+  }
+
+  /**
+   * Send local notification for ride cancellation
+   */
+  async sendCancellationNotification(rideId: string, cancelledBy: string, reason?: string): Promise<void> {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '❌ Ride Cancelled',
+          body: reason 
+            ? `Ride ${rideId.slice(-8)} cancelled by ${cancelledBy}. Reason: ${reason}`
+            : `Ride ${rideId.slice(-8)} was cancelled by ${cancelledBy}.`,
+          data: {
+            rideId,
+            type: 'ride_cancellation',
+            cancelledBy,
+            reason,
+          },
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+          color: '#EF4444', // Red color for cancellation
+          badge: 1,
+        },
+        trigger: null, // Send immediately
+      });
+
+      console.log(`🔔 Sent cancellation notification for ride:`, rideId);
+    } catch (error) {
+      console.error('🔔 Error sending cancellation notification:', error);
     }
   }
 

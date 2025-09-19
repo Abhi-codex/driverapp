@@ -79,7 +79,7 @@ export default {
           icon: "./assets/images/logo.png",
           color: "#0066CC",
           sounds: ["./assets/sounds/notification.wav"],
-          mode: "production"
+          mode: "development"
         }
       ],
       [
