@@ -1,4 +1,4 @@
-import { styles } from '../../constants/tailwindStyles';
+import { styles, colors } from '../../constants/tailwindStyles';
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -22,31 +22,38 @@ const Drive: React.FC<DriveProps> = ({
   acceptedRide,
   onPress 
 }) => {
+  // Calculate effective active ride status, excluding completed rides
+  const effectiveHasActiveRide = hasActiveRide && acceptedRide && 
+    !(acceptedRide.status === 'COMPLETED' || acceptedRide.status === 'DROPOFF_COMPLETE');
   const getButtonText = () => {
-    if (hasActiveRide) {
+    if (effectiveHasActiveRide) {
       // Check if ride is cancelled
       if (acceptedRide?.status === 'CANCELLED') {
         return 'Ride Cancelled';
       }
       return isTrip ? 'Continue to Hospital' : 'Go to Patient';
     }
+    if (hasActiveRide && (acceptedRide?.status === 'COMPLETED' || acceptedRide?.status === 'DROPOFF_COMPLETE')) {
+      return 'Ride Completed';
+    }
     return isOnline ? 'Start Driving' : 'Go Online First';
   };
 
   const getButtonSubtext = () => {
-    if (hasActiveRide) {
-      // Handle cancelled rides
-      if (acceptedRide?.status === 'CANCELLED') {
-        const cancelledBy = acceptedRide?.cancellation?.cancelledBy;
-        const reason = acceptedRide?.cancellation?.cancelReason;
-        return cancelledBy === 'patient' 
-          ? `Cancelled by patient${reason ? `: ${reason}` : ''}` 
-          : `Cancelled${reason ? `: ${reason}` : ''}`;
-      }
-      
+    if (effectiveHasActiveRide) {
       return isTrip 
         ? 'You have a patient onboard. Navigate to hospital.' 
         : 'You have an accepted ride. Navigate to patient pickup.';
+    }
+    if (hasActiveRide && (acceptedRide?.status === 'COMPLETED' || acceptedRide?.status === 'DROPOFF_COMPLETE')) {
+      return 'Ride has been completed successfully';
+    }
+    if (hasActiveRide && acceptedRide?.status === 'CANCELLED') {
+      const cancelledBy = acceptedRide?.cancellation?.cancelledBy;
+      const reason = acceptedRide?.cancellation?.cancelReason;
+      return cancelledBy === 'patient' 
+        ? `Cancelled by patient${reason ? `: ${reason}` : ''}` 
+        : `Cancelled${reason ? `: ${reason}` : ''}`;
     }
     return isOnline
       ? 'Go to map view and start accepting ride requests'
@@ -54,12 +61,14 @@ const Drive: React.FC<DriveProps> = ({
   };
 
   const getButtonColor = () => {
-    if (hasActiveRide) {
-      // Handle cancelled rides
-      if (acceptedRide?.status === 'CANCELLED') {
-        return styles.bgGray500; // Grey for cancelled rides
-      }
+    if (effectiveHasActiveRide) {
       return isTrip ? styles.bgSecondary600 : styles.bgPrimary600;
+    }
+    if (hasActiveRide && (acceptedRide?.status === 'COMPLETED' || acceptedRide?.status === 'DROPOFF_COMPLETE')) {
+      return { backgroundColor: colors.medical[500] }; // Green for completed rides
+    }
+    if (hasActiveRide && acceptedRide?.status === 'CANCELLED') {
+      return styles.bgGray500; // Grey for cancelled rides
     }
     return styles.bgEmergency500;
   };
@@ -89,16 +98,24 @@ const Drive: React.FC<DriveProps> = ({
         styles.shadow, 
         styles.mb6, 
         styles.alignCenter, 
-        (!isOnline && !hasActiveRide) ? styles.opacity75 : styles.opacity100
+        (!isOnline && !effectiveHasActiveRide) ? styles.opacity75 : styles.opacity100
       ]}
       onPress={onPress}
-      disabled={!isOnline && !hasActiveRide}
+      disabled={!isOnline && !effectiveHasActiveRide}
       activeOpacity={0.80}
     >
       <View style={[styles.flexRow, styles.alignCenter, styles.mb2]}>
-        {hasActiveRide && (
+        {effectiveHasActiveRide && (
           <MaterialIcons 
             name={isTrip ? "local-hospital" : "person-pin-circle"} 
+            size={32} 
+            color="white" 
+            style={styles.mr2}
+          />
+        )}
+        {hasActiveRide && (acceptedRide?.status === 'COMPLETED' || acceptedRide?.status === 'DROPOFF_COMPLETE') && (
+          <MaterialIcons 
+            name="check-circle" 
             size={32} 
             color="white" 
             style={styles.mr2}
@@ -113,10 +130,18 @@ const Drive: React.FC<DriveProps> = ({
         {getButtonSubtext()}
       </Text>
       
-      {hasActiveRide && (
+      {effectiveHasActiveRide && (
         <View style={[styles.mt3, styles.px4, styles.py2, styles.bgWhite, styles.roundedLg, { opacity: 0.9 }]}>
           <Text style={[styles.textSm, styles.fontMedium, styles.textGray800, styles.textCenter]}>
-            {isTrip ? '🚨 PATIENT ONBOARD' : '📍 RIDE ACCEPTED'}
+            {isTrip ? 'PATIENT ONBOARD' : 'RIDE ACCEPTED'}
+          </Text>
+        </View>
+      )}
+      
+      {hasActiveRide && (acceptedRide?.status === 'COMPLETED' || acceptedRide?.status === 'DROPOFF_COMPLETE') && (
+        <View style={[styles.mt3, styles.px4, styles.py2, styles.bgWhite, styles.roundedLg, { opacity: 0.9 }]}>
+          <Text style={[styles.textSm, styles.fontMedium, styles.textGray800, styles.textCenter]}>
+            RIDE COMPLETED
           </Text>
         </View>
       )}
