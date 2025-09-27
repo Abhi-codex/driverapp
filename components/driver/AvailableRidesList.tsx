@@ -261,7 +261,7 @@ function AvailableRidesList({
             styles.alignCenter, styles.borderGray200, styles.mb1]}>
             <MaterialCommunityIcons name="map-marker" size={12} color={colors.primary[600]} style={[styles.mr2]} />
             <Text style={[styles.textXs, styles.textGray600, styles.flex1]} numberOfLines={1}>
-              Pickup: {ride.pickup.address}
+              Pickup: {ride.pickup?.address || 'Location not available'}
             </Text>
           </View>
           
@@ -270,7 +270,7 @@ function AvailableRidesList({
             styles.alignCenter, styles.borderGray200, styles.mb1]}>
             <MaterialCommunityIcons name="hospital-building" size={12} color={colors.medical[600]} style={[styles.mr2]} />
             <Text style={[styles.textXs, styles.textGray600, styles.flex1]} numberOfLines={1}>
-              Hospital: {ride.drop.address}
+              Hospital: {ride.drop?.address || 'Location not available'}
             </Text>
           </View>
         </View>

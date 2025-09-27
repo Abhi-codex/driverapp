@@ -100,7 +100,7 @@ function DriverMinimizedInfo({
       setCurrentStepIndex(prev => prev + 1);
     }
   };
-  if (ongoingRide) {
+  if (ongoingRide && ongoingRide.pickup && ongoingRide.drop) {
     // If navigating, show navigation info
     if (isNavigating && currentRoute && currentStep) {
       return (
@@ -203,6 +203,51 @@ function DriverMinimizedInfo({
     }
 
     // Regular ride info when not navigating
+    if (!ongoingRide || !ongoingRide.pickup || !ongoingRide.drop) {
+      // Show available rides info when no valid ride data
+      return (
+        <View style={[styles.px4, styles.py3]}>
+          <View style={[styles.flexCol, styles.justifyCenter, styles.alignCenter]}>
+            {/* Header */}
+            <View style={[styles.flexRow, styles.alignCenter, styles.mb3]}>
+              <View style={[styles.w8, styles.h8, styles.roundedFull, styles.alignCenter, styles.justifyCenter, { backgroundColor: colors.gray[100] }]}>
+                <MaterialCommunityIcons 
+                  name="ambulance" 
+                  size={16} 
+                  color={colors.emergency[600]} 
+                />
+              </View>
+              <Text style={[styles.fontSemibold, styles.textGray900, styles.textSm, styles.ml2]}>
+                Emergency Requests
+              </Text>
+            </View>
+
+            {/* Available count */}
+            {availableRidesCount > 0 ? (
+              <View style={[styles.flexRow, styles.alignCenter, styles.px3, styles.py2, styles.rounded, { backgroundColor: colors.gray[100] }]}>
+                <Text style={[styles.fontSemibold, styles.textBase, styles.textGray700]}>
+                  {availableRidesCount}
+                </Text>
+                <Text style={[styles.textSm, styles.textGray600, styles.ml1]}>
+                  emergency call{availableRidesCount !== 1 ? "s" : ""} available
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.flexRow, styles.alignCenter, styles.px3, styles.py2, styles.rounded, { backgroundColor: colors.gray[100] }]}>
+                <Text style={[styles.textSm, styles.textGray600]}>
+                  No emergency calls at the moment
+                </Text>
+              </View>
+            )}
+
+            <Text style={[styles.textXs, styles.textGray400, styles.mt2]}>
+              Swipe up for more details
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
     const getAmbulanceIcon = (vehicle: string) => {
       const icons = {
         'bls': 'medical-bag',
@@ -237,7 +282,7 @@ function DriverMinimizedInfo({
           <View style={[styles.flexRow, styles.alignCenter, styles.mb3]}>
             <View style={[styles.w8, styles.h8, styles.roundedFull, styles.alignCenter, styles.justifyCenter, { backgroundColor: colors.gray[100] }]}>
               <MaterialCommunityIcons 
-                name={getAmbulanceIcon(ongoingRide.vehicle) as any} 
+                name={getAmbulanceIcon(ongoingRide?.vehicle || 'auto') as any} 
                 size={16} 
                 color={colors.emergency[600]} 
               />
@@ -257,7 +302,7 @@ function DriverMinimizedInfo({
                 style={[styles.mr2]}
               />
               <Text style={[styles.textXs, styles.textGray600, styles.flex1]} numberOfLines={1}>
-                {formatAddress(ongoingRide.pickup.address)}
+                {ongoingRide?.pickup?.address ? formatAddress(ongoingRide.pickup.address) : 'Pickup location'}
               </Text>
             </View>
 
@@ -269,7 +314,7 @@ function DriverMinimizedInfo({
                 style={[styles.mr2]}
               />
               <Text style={[styles.textXs, styles.textGray600, styles.flex1]} numberOfLines={1}>
-                {formatAddress(ongoingRide.drop.address)}
+                {ongoingRide?.drop?.address ? formatAddress(ongoingRide.drop.address) : 'Destination'}
               </Text>
             </View>
           </View>

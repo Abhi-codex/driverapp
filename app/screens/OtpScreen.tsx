@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, Image, Alert, BackHandler } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Image, Alert, BackHandler, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { StackNavigationProp } from "@react-navigation/stack";
 import { styles as s } from "../../constants/tailwindStyles";
@@ -219,7 +219,11 @@ const OtpScreen: React.FC = () => {
   };
 
   return (
-    <View style={[s.flex1, s.justifyCenter, s.alignCenter, s.bgGray50]}>
+    <KeyboardAvoidingView 
+      style={[s.flex1, s.bgGray50]} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <View style={[s.flex1, s.justifyCenter, s.alignCenter]}>
       {/* Header */}
       <View style={[s.alignCenter, s.mb6]}>
         <View style={[s.alignCenter, s.justifyCenter]}>
@@ -306,7 +310,8 @@ const OtpScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
       )}
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 

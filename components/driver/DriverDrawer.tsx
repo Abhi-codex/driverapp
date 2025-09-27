@@ -19,6 +19,7 @@ interface DriverDrawerProps {
   driverLocation: any;
   destination: any;
   tripStarted: boolean;
+  loading: boolean;
   onAcceptRide: (rideId: string) => void;
   onRejectRide: (rideId: string) => void;
   onToggleOnline: () => void;
@@ -52,6 +53,7 @@ export default function DriverDrawer({
   driverLocation,
   destination,
   tripStarted,
+  loading,
   onAcceptRide,
   onRejectRide,
   onToggleOnline,
@@ -92,57 +94,60 @@ export default function DriverDrawer({
     return { opacity };
   });
   return (
-    <Animated.View
-      style={[ styles.absolute, styles.left1, styles.right1, styles.bgWhite, styles.rounded2xl, 
-        styles.shadowLg, styles.roundedTl3xl, styles.roundedTr3xl,
-        { height: screenHeight, top: 0, zIndex: 100 }, drawerStyle ]}>
-      <PanGestureHandler onGestureEvent={gestureHandler}>
+    <PanGestureHandler onGestureEvent={gestureHandler}>
+      <Animated.View
+        style={[ styles.absolute, styles.left1, styles.right1, styles.bgWhite, styles.rounded2xl, 
+          styles.shadowLg, styles.roundedTl3xl, styles.roundedTr3xl,
+          { height: screenHeight, top: 0, zIndex: 100 }, drawerStyle ]}>
         <Animated.View
           style={[ styles.alignCenter, styles.py3, styles.borderB1, styles.borderGray100, handleStyle ]}>
           <View
             style={[styles.w12, styles.h1, styles.bgGray300, styles.rounded]}
           />
         </Animated.View>
-      </PanGestureHandler>
 
-      {currentSnapPoint === "MINIMIZED" ? (
-        <DriverMinimizedInfo
-          availableRidesCount={availableRides.length}
-          online={online}
-          todaysEarnings="125"
-          ongoingRide={acceptedRide}
-          isNavigating={isNavigating}
-          navigationStage={navigationStage}
-          currentRoute={currentRoute}
-        />
-      ) : (
-        <DriverDrawerContent
-          currentSnapPoint={currentSnapPoint}
-          acceptedRide={acceptedRide}
-          availableRides={availableRides}
-          online={online}
-          driverLocation={driverLocation}
-          destination={destination}
-          tripStarted={tripStarted}
-          onAcceptRide={onAcceptRide}
-          onRejectRide={onRejectRide}
-          onToggleOnline={onToggleOnline}
-          onUpdateRideStatus={onUpdateRideStatus}
-          distanceKm={distanceKm}
-          etaMinutes={etaMinutes}
-          fare={fare}
-          isNavigating={isNavigating}
-          navigationStage={navigationStage}
-          currentRoute={currentRoute}
-          navigationMode={navigationMode}
-          onNavigationStart={onNavigationStart}
-          onNavigationStop={onNavigationStop}
-          onStageComplete={onStageComplete}
-          onToggleNavigationMode={onToggleNavigationMode}
-          onCancelRide={onCancelRide}
-          onCheckCanCancel={onCheckCanCancel}
-        />
-      )}
-    </Animated.View>
+        {currentSnapPoint === "MINIMIZED" ? (
+          <DriverMinimizedInfo
+            availableRidesCount={availableRides.length}
+            online={online}
+            todaysEarnings="125"
+            ongoingRide={acceptedRide}
+            isNavigating={isNavigating}
+            navigationStage={navigationStage}
+            currentRoute={currentRoute}
+          />
+        ) : (
+          <View style={[styles.flex1, styles.relative]}>
+            <DriverDrawerContent
+              currentSnapPoint={currentSnapPoint}
+              acceptedRide={acceptedRide}
+              availableRides={availableRides}
+              online={online}
+              driverLocation={driverLocation}
+              destination={destination}
+              tripStarted={tripStarted}
+              loading={loading}
+              onAcceptRide={onAcceptRide}
+              onRejectRide={onRejectRide}
+              onToggleOnline={onToggleOnline}
+              onUpdateRideStatus={onUpdateRideStatus}
+              distanceKm={distanceKm}
+              etaMinutes={etaMinutes}
+              fare={fare}
+              isNavigating={isNavigating}
+              navigationStage={navigationStage}
+              currentRoute={currentRoute}
+              navigationMode={navigationMode}
+              onNavigationStart={onNavigationStart}
+              onNavigationStop={onNavigationStop}
+              onStageComplete={onStageComplete}
+              onToggleNavigationMode={onToggleNavigationMode}
+              onCancelRide={onCancelRide}
+              onCheckCanCancel={onCheckCanCancel}
+            />
+          </View>
+        )}
+      </Animated.View>
+    </PanGestureHandler>
   );
 }

@@ -130,11 +130,7 @@ function DriverMap({
         longitude: Number(acceptedRide.drop.longitude.toFixed(8))
       } : null
     };
-  }, [
-    acceptedRide?._id || '',
-    acceptedRide?.pickup ? Math.round(acceptedRide.pickup.latitude * 100000000) : 0, // 8 decimal precision
-    acceptedRide?.pickup ? Math.round(acceptedRide.pickup.longitude * 100000000) : 0
-  ]);
+  }, [acceptedRide]);
 
   // Enhanced map region calculation for better route viewing
   const mapRegion = useMemo(() => {

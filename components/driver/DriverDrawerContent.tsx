@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useEffect } from "react";
-import { ScrollView, View, Text, TouchableOpacity, Alert } from "react-native";
-import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { View, Text, TouchableOpacity, Alert } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
+import { MaterialIcons } from "@expo/vector-icons";
 import { styles, colors } from "../../constants/tailwindStyles";
-import { Ride, DriverStats } from "../../types/rider";
+import { Ride, DriverStats, RideStatus } from "../../types/rider";
 import AcceptedRideInfo from "./AcceptedRideInfo";
 import AvailableRidesList from "./AvailableRidesList";
 import NoRidesAvailable from "./NoRidesAvailable";
@@ -18,6 +19,7 @@ interface DriverDrawerContentProps {
   driverLocation: any;
   destination: any;
   tripStarted: boolean;
+  loading: boolean;
   onAcceptRide: (rideId: string) => void;
   onRejectRide: (rideId: string) => void;
   onToggleOnline: () => void;
@@ -53,6 +55,7 @@ export default function DriverDrawerContent({
   onToggleOnline,
   onUpdateRideStatus,
   tripStarted,
+  loading,
   distanceKm,
   etaMinutes,
   fare,
@@ -68,6 +71,7 @@ export default function DriverDrawerContent({
   onCancelRide,
   onCheckCanCancel,
 }: DriverDrawerContentProps) {
+  console.log('🖥️ DriverDrawerContent render - currentSnapPoint:', currentSnapPoint, 'acceptedRide:', acceptedRide ? `ID: ${acceptedRide._id}, Status: ${acceptedRide.status}` : 'null');
   // Navigation state management
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [estimatedArrival, setEstimatedArrival] = useState('--:--');
@@ -139,6 +143,11 @@ export default function DriverDrawerContent({
       Alert.alert('Error', 'Failed to cancel ride. Please try again.');
     }
   }, [acceptedRide, onCancelRide]);
+
+  // Debug: Log accepted ride changes
+  useEffect(() => {
+    console.log('🖥️ DriverDrawerContent - acceptedRide changed:', acceptedRide ? `ID: ${acceptedRide._id}, Status: ${acceptedRide.status}` : 'null');
+  }, [acceptedRide]);
 
   // Format distance for display
   const formatDistance = useCallback((distance: string | number) => {
@@ -228,20 +237,23 @@ export default function DriverDrawerContent({
   };
   return (
     <ScrollView
-      style={[styles.flex1, styles.px4]}
-      contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}
+      style={[styles.flex1]}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
       showsVerticalScrollIndicator={true}
       scrollEnabled={true}
       bounces={true}
       keyboardShouldPersistTaps="handled"
+      scrollEventThrottle={16}
+      alwaysBounceVertical={true}
+      simultaneousHandlers={useRef(null)}
     >
       {acceptedRide ? (
-        <View style={[styles.py4]}>
-          {/* Show navigation content if navigating */}
+        <View style={[styles.flex1]}>
+          {/* Show navigation content if navigating - FULL FOCUS */}
           {isNavigating && currentRoute && currentStep ? (
-            <View>
+            <View style={[styles.flex1]}>
               {/* Navigation Header with Current Step */}
-              <View style={[styles.mb4, styles.p4, styles.roundedLg, { backgroundColor: colors.primary[50] }]}>
+              <View style={[styles.mb3, styles.p4, styles.roundedLg, { backgroundColor: colors.primary[50] }]}>
                 <View style={[styles.flexRow, styles.alignCenter, styles.justifyBetween, styles.mb3]}>
                   <View style={[styles.flexRow, styles.alignCenter]}>
                     <View style={[styles.w10, styles.h10, styles.roundedFull, styles.alignCenter, styles.justifyCenter, { backgroundColor: colors.primary[100] }]}>
@@ -365,14 +377,15 @@ export default function DriverDrawerContent({
 
               {/* Turn by turn instructions list */}
               {currentRoute.steps && currentRoute.steps.length > 0 && (
-                <View style={[styles.mb4, styles.flex1]}>
+                <View style={[styles.flex1, styles.mb3]}>
                   <Text style={[styles.textBase, styles.fontSemibold, styles.textGray900, styles.mb3]}>
                     All Directions ({totalSteps} steps)
                   </Text>
                   <ScrollView 
                     style={[{ 
-                      maxHeight: currentSnapPoint === "FULL" ? 500 : 350, 
-                      minHeight: 200 
+                      flex: 1,
+                      maxHeight: currentSnapPoint === "FULL" ? 400 : 250, 
+                      minHeight: 150 
                     }]} 
                     showsVerticalScrollIndicator={true}
                     nestedScrollEnabled={true}
@@ -429,20 +442,55 @@ export default function DriverDrawerContent({
                   </ScrollView>
                 </View>
               )}
-            </View>
-          ) : (
-            // Show navigation controls if ride accepted but not navigating
-            acceptedRide && onNavigationStart && !isNavigating && (
-              <View style={[styles.mb4, styles.p4, styles.roundedLg, { backgroundColor: colors.gray[50] }]}>
-                <View style={[styles.flexRow, styles.alignCenter, styles.justifyBetween, styles.mb3]}>
+
+              {/* Compact Ride Info During Navigation */}
+              <View style={[styles.mt2, styles.p3, styles.roundedLg, { backgroundColor: colors.gray[50] }]}>
+                <View style={[styles.flexRow, styles.alignCenter, styles.justifyBetween]}>
                   <View style={[styles.flexRow, styles.alignCenter]}>
-                    <View style={[styles.w10, styles.h10, styles.roundedFull, styles.alignCenter, styles.justifyCenter, { backgroundColor: colors.gray[100] }]}>
-                      <MaterialCommunityIcons name="navigation-outline" size={20} color={colors.gray[600]} />
-                    </View>
-                    <Text style={[styles.textBase, styles.fontSemibold, styles.textGray900, styles.ml3]}>
-                      Navigation Available
+                    <MaterialIcons name="local-hospital" size={16} color={colors.medical[600]} style={[styles.mr2]} />
+                    <Text style={[styles.textSm, styles.fontMedium, styles.textGray800]}>
+                      {acceptedRide.emergency?.name || 'Emergency Transport'}
                     </Text>
                   </View>
+                  <Text style={[styles.textXs, styles.textGray600]}>
+                    #{acceptedRide._id.slice(-6).toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            
+          ) : (
+            <>
+              {acceptedRide && acceptedRide.status === RideStatus.DROPOFF_COMPLETE && onUpdateRideStatus && (
+              <View style={[styles.mb4, styles.p4, styles.roundedLg, { backgroundColor: colors.medical[50] }]}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert(
+                      'Complete Ride',
+                      'Are you sure you want to mark this ride as completed?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Complete',
+                          style: 'default',
+                          onPress: () => onUpdateRideStatus(acceptedRide._id, RideStatus.COMPLETED)
+                        }
+                      ]
+                    );
+                  }}
+                  style={[styles.w100, styles.py3, styles.px4, styles.roundedLg, styles.alignCenter, { backgroundColor: colors.medical[600] }]}
+                >
+                  <Text style={[styles.fontMedium, styles.textWhite, styles.textSm]}>
+                    Complete Ride
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              )}
+
+              {/* Show navigation controls if ride accepted but not navigating and not completed */}
+              {acceptedRide && onNavigationStart && !isNavigating && acceptedRide.status !== RideStatus.DROPOFF_COMPLETE && (
+              <View style={[styles.mb4, styles.p4, styles.roundedLg, { backgroundColor: colors.gray[50] }]}>
+                <View style={[styles.flexRow, styles.alignCenter, styles.justifyBetween, styles.mb3]}>
                 </View>
 
                 {/* Navigation Mode Toggle */}
@@ -459,15 +507,7 @@ export default function DriverDrawerContent({
                       ? acceptedRide.pickup 
                       : acceptedRide.drop;
                     const stage = navigationStage === 'to_patient' || !tripStarted ? 'to_patient' : 'to_hospital';
-                    
-                    // Enhanced logging for hospital navigation
-                    if (stage === 'to_hospital') {
-                      console.log('🏥 Starting navigation to hospital:');
-                      console.log('Hospital coordinates:', destination);
-                      console.log('Trip started:', tripStarted);
-                      console.log('Navigation stage:', navigationStage);
-                    }
-                    
+          
                     // Ensure destination exists before starting navigation
                     if (!destination) {
                       Alert.alert('Navigation Error', `${stage === 'to_patient' ? 'Patient pickup' : 'Hospital'} location is not available.`);
@@ -482,36 +522,9 @@ export default function DriverDrawerContent({
                     Start Navigation
                   </Text>
                 </TouchableOpacity>
-
-                {/* Cancel Ride Button */}
-                {onCancelRide && (
-                  <TouchableOpacity
-                    onPress={handleCancelRide}
-                    style={[
-                      styles.w100, 
-                      styles.py3, 
-                      styles.px4, 
-                      styles.roundedLg, 
-                      styles.alignCenter, 
-                      styles.mt2,
-                      { backgroundColor: colors.danger[600], borderWidth: 1, borderColor: colors.danger[500] }
-                    ]}
-                  >
-                    <View style={[styles.flexRow, styles.alignCenter]}>
-                      <MaterialCommunityIcons 
-                        name="close-circle" 
-                        size={16} 
-                        color="white" 
-                        style={styles.mr1} 
-                      />
-                      <Text style={[styles.fontMedium, styles.textWhite, styles.textSm]}>
-                        Cancel Ride
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                )}
               </View>
-            )
+              )}
+            </>
           )}
           
           <AcceptedRideInfo acceptedRide={acceptedRide} driverLocation={driverLocation} />
@@ -539,7 +552,7 @@ export default function DriverDrawerContent({
             )}
           </View>
 
-          {currentSnapPoint === "FULL" && (
+          {(currentSnapPoint === "FULL" || currentSnapPoint === "PARTIAL") && acceptedRide && (
             <View style={[styles.mt6]}>
               <DriverControlPanel
                 online={online}
@@ -548,6 +561,7 @@ export default function DriverDrawerContent({
                 fare={fare}
                 acceptedRide={acceptedRide}
                 tripStarted={tripStarted}
+                loading={loading}
                 onToggleOnline={onToggleOnline}
                 onUpdateRideStatus={onUpdateRideStatus}
               />

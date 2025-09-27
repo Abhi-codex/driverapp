@@ -321,6 +321,34 @@ class NotificationService {
   }
 
   /**
+   * Send local notification for ambulance arrival
+   */
+  async sendArrivalNotification(rideId: string, location: string): Promise<void> {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🚑 Ambulance Has Arrived',
+          body: `Your ambulance has arrived at ${location}`,
+          data: {
+            rideId,
+            type: 'ambulance_arrived',
+            location,
+          },
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+          color: '#10B981', // Green color for arrival
+          badge: 1,
+        },
+        trigger: null, // Send immediately
+      });
+
+      console.log(`🔔 Sent arrival notification for ride:`, rideId);
+    } catch (error) {
+      console.error('🔔 Error sending arrival notification:', error);
+    }
+  }
+
+  /**
    * Handle notification received while app is running
    */
   onNotificationReceived(callback: (notification: Notifications.Notification) => void): Notifications.EventSubscription {

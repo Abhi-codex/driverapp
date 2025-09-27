@@ -1,7 +1,7 @@
 import DriverDrawer from "../../components/driver/DriverDrawer";
 import DriverMap from "../../components/driver/DriverMap";
 import * as Location from "expo-location";
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { ActivityIndicator, Alert, Dimensions, StatusBar, Text, View, TouchableOpacity, BackHandler, AppState } from "react-native";
 import { runOnJS, useAnimatedGestureHandler, useSharedValue, withSpring } from "react-native-reanimated";
 import { colors, styles } from "../../constants/tailwindStyles";
@@ -25,7 +25,6 @@ export default function DriverMapScreen() {
   const [locationSubscription, setLocationSubscription] = useState<any>(null);
   
   const translateY = useSharedValue(SNAP_POINTS.MINIMIZED);
-  const autoExpandedRideId = useRef<string | null>(null);
 
   const {
     online,
@@ -35,6 +34,7 @@ export default function DriverMapScreen() {
     tripStarted,
     destination,
     routeCoords,
+    rideLoading,
     handleAcceptRide,
     handleRejectRide,
     toggleOnline,
@@ -53,7 +53,7 @@ export default function DriverMapScreen() {
     toggleNavigationMode,
     cancelRide,
     canCancelRide
-  } = useRiderLogic(); // Remove driverLocation parameter to prevent continuous refresh
+  } = useRiderLogic(); 
 
   // Wrapper functions to bridge interface differences
   const handleNavigationStart = useCallback((
@@ -68,25 +68,9 @@ export default function DriverMapScreen() {
   }, [startNavigation, driverLocation]);
 
   const handleStageCompleteWrapper = useCallback((stage: 'pickup' | 'dropoff') => {
-    // Map component stage types to hook stage types
     const mappedStage = stage === 'pickup' ? 'patient_pickup' : 'hospital_arrival';
     handleStageComplete(mappedStage as 'patient_pickup' | 'hospital_arrival');
   }, [handleStageComplete]);
-
-  // Auto-expand drawer when ride is accepted
-  useEffect(() => {
-    if (acceptedRide?._id && autoExpandedRideId.current !== acceptedRide._id) {
-      translateY.value = withSpring(SNAP_POINTS.PARTIAL, {
-        damping: 20,
-        stiffness: 90,
-      });
-      setCurrentSnapPoint("PARTIAL");
-      autoExpandedRideId.current = acceptedRide._id;
-    } 
-    else if (!acceptedRide?._id) {
-      autoExpandedRideId.current = null;
-    }
-  }, [acceptedRide?._id]);
 
   // Handle back button protection when driver has accepted ride
   useFocusEffect(
@@ -136,21 +120,29 @@ export default function DriverMapScreen() {
     onStart: (_, context: any) => { context.startY = translateY.value; },
     onActive: (event, context) => { translateY.value = context.startY + event.translationY; },
     onEnd: (event) => { 
-      const { velocityY } = event;
+      const { velocityY, translationY } = event;
       let destSnapPoint = SNAP_POINTS.MINIMIZED;
       const currentY = translateY.value;
+      const startY = SNAP_POINTS.MINIMIZED;
 
-      if (currentY < SNAP_POINTS.FULL + 100) {
+      // Calculate how far the user swiped
+      const swipeDistance = startY - currentY;
+      const swipeUp = translationY < 0; // negative means up
+
+      console.log('Gesture end:', { currentY, velocityY, translationY, swipeDistance, swipeUp });
+
+      if (currentY < SNAP_POINTS.FULL + 50) {
         destSnapPoint = SNAP_POINTS.FULL;
         runOnJS(setCurrentSnapPoint)("FULL");
       } 
-
-      else if (currentY < SNAP_POINTS.PARTIAL + 100) {
-        if (velocityY < -500) {
+      else if (currentY < SNAP_POINTS.PARTIAL + 50) {
+        // If swiped up significantly or with some velocity, go to FULL
+        if (swipeUp && (swipeDistance > 100 || velocityY < -200)) {
           destSnapPoint = SNAP_POINTS.FULL;
           runOnJS(setCurrentSnapPoint)("FULL");
         } 
-        else if (velocityY > 500) {
+        // If swiped down significantly or with velocity, go to MINIMIZED
+        else if (!swipeUp && (Math.abs(translationY) > 50 || velocityY > 200)) {
           destSnapPoint = SNAP_POINTS.MINIMIZED;
           runOnJS(setCurrentSnapPoint)("MINIMIZED");
         } 
@@ -159,9 +151,9 @@ export default function DriverMapScreen() {
           runOnJS(setCurrentSnapPoint)("PARTIAL");
         }
       } 
-      
       else {
-        if (velocityY < -500) {
+        // If swiped up with some velocity or distance, go to PARTIAL
+        if (swipeUp && (swipeDistance > 50 || velocityY < -100)) {
           destSnapPoint = SNAP_POINTS.PARTIAL;
           runOnJS(setCurrentSnapPoint)("PARTIAL");
         } 
@@ -453,6 +445,7 @@ export default function DriverMapScreen() {
           driverLocation={driverLocation}
           destination={destination}
           tripStarted={tripStarted}
+          loading={rideLoading}
           onAcceptRide={(rideId) => handleAcceptRide(rideId, driverLocation)}
           onRejectRide={handleRejectRide}
           onToggleOnline={toggleOnline}

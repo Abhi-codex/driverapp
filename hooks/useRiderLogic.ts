@@ -17,10 +17,33 @@ export const useRiderLogic = () => {
     isSocketConnected,
     connectSocket,
     disconnectSocket,
-    reconnectSocket
+    reconnectSocket,
+    subscribeToRide,
+    unsubscribeFromRide
   } = useSocketConnection({
     onRideUpdate: (ride) => updateRideInList(ride),
     onRideCancelled: (ride, cancelledBy, message) => handleRideCancellation(ride, cancelledBy, message),
+    onRideNotification: (data) => {
+      console.log('📡 Ride notification:', data);
+      // Handle different notification types
+      switch (data.type) {
+        case 'ride_accepted':
+          Alert.alert('Ride Accepted', data.message);
+          break;
+        case 'pickup_completed':
+          Alert.alert('Patient Picked Up', data.message);
+          break;
+        case 'dropoff_completed':
+          Alert.alert('Ride Completed', data.message);
+          break;
+        case 'ride_cancelled_by_patient':
+        case 'ride_cancelled_by_driver':
+          Alert.alert('Ride Cancelled', data.message);
+          break;
+        default:
+          Alert.alert('Ride Update', data.message);
+      }
+    }
   });
 
   const {
@@ -52,12 +75,11 @@ export const useRiderLogic = () => {
     availableRides,
     acceptedRide,
     tripStarted,
-    loading,
+    loading: rideLoading,
     error,
     fetchAvailableRides,
     handleAcceptRide,
     updateRideStatus,
-    verifyPickup,
     handleRejectRide,
     canCancelRide,
     cancelRide,
@@ -65,7 +87,11 @@ export const useRiderLogic = () => {
     updateRideInList,
     setAcceptedRide,
     setTripStarted,
-  } = useRideManagement();
+  } = useRideManagement({
+    subscribeToRide,
+    unsubscribeFromRide,
+    stopNavigation,
+  });
 
   // Local state 
   const [routeCoords, setRouteCoords] = useState<Array<{ latitude: number; longitude: number }>>([]);
@@ -97,7 +123,7 @@ export const useRiderLogic = () => {
         if (online && !acceptedRide) {
           fetchAvailableRides(currentDriverLocation || undefined);
         }
-      }, 5000);
+      }, 15000);
     } else if ((!online || acceptedRide) && syncIntervalRef.current) {
       clearInterval(syncIntervalRef.current);
       syncIntervalRef.current = null;
@@ -117,15 +143,10 @@ export const useRiderLogic = () => {
   useEffect(() => {
     let rideStatusInterval: any = null;
 
-    if (acceptedRide?._id && !['COMPLETED', 'CANCELLED', 'completed', 'cancelled', 'CANCELED'].includes(acceptedRide.status)) {
+    if (acceptedRide?._id && !['DROPOFF_COMPLETE', 'COMPLETED', 'CANCELLED', 'completed', 'cancelled', 'CANCELED'].includes(acceptedRide.status)) {
       const checkRideStatus = async () => {
         try {
-          let response;
-          try {
-            response = await makeAuthenticatedRequest(`${getServerUrl()}/ride/${acceptedRide._id}`);
-          } catch (error) {
-            response = await makeAuthenticatedRequest(`${getServerUrl()}/api/ride/${acceptedRide._id}`);
-          }
+          const response = await makeAuthenticatedRequest(`${getServerUrl()}/ride/${acceptedRide._id}`);
           
           if (response.status === 'CANCELLED' || response.status === 'cancelled' || response.status === 'CANCELED') {
             if (rideStatusInterval) {
@@ -138,6 +159,21 @@ export const useRiderLogic = () => {
             
             await handleRideCancellation(response, cancelledBy, reason);
             
+          } else if (response.status === 'ARRIVED') {
+            // Show arrival notification
+            try {
+              const notificationService = (await import('../utils/notificationService')).default;
+              if (notificationService.isReady()) {
+                const location = response.drop?.address || 'the destination';
+                await notificationService.sendArrivalNotification(response._id, location);
+              }
+            } catch (error) {
+              console.error('Failed to send arrival notification:', error);
+            }
+            
+            // Update local ride status
+            updateRideInList(response);
+            
           } else if (response.status !== acceptedRide.status) {
             updateRideInList(response);
           }
@@ -146,7 +182,8 @@ export const useRiderLogic = () => {
         }
       };
       
-      rideStatusInterval = setInterval(checkRideStatus, 3000);
+      // Check ride status every 10 seconds instead of 3 to reduce backend load
+      rideStatusInterval = setInterval(checkRideStatus, 10000);
       checkRideStatus();
     }
 
@@ -168,68 +205,37 @@ export const useRiderLogic = () => {
 
     try {
       if (stage === 'patient_pickup') {
-        // For pickup completion, we need OTP verification
-        Alert.prompt(
-          'Pickup Verification',
-          'Please enter the OTP provided by the patient to verify pickup:',
+        // Update ride status to PICKUP_COMPLETE (patient picked up)
+        await updateRideStatus(acceptedRide._id, 'PICKUP_COMPLETE' as any);
+
+        // Start navigation to hospital
+        const hospitalDestination = {
+          latitude: acceptedRide.drop.latitude,
+          longitude: acceptedRide.drop.longitude,
+        };
+
+        setNavigationStage('to_hospital');
+        await startNavigation(hospitalDestination, 'to_hospital', currentDriverLocation);
+
+        Alert.alert(
+          'Patient Picked Up Successfully!',
+          'Navigation to the hospital has started. Please deliver the patient safely.',
           [
             {
-              text: 'Cancel',
-              style: 'cancel',
-            },
-            {
-              text: 'Verify',
-              onPress: async (otp) => {
-                if (!otp || otp.length < 4) {
-                  Alert.alert('Invalid OTP', 'Please enter a valid OTP');
-                  return;
-                }
-                
-                try {
-                  await verifyPickup(acceptedRide._id, otp, currentDriverLocation);
-                  
-                  const hospitalDestination = {
-                    latitude: acceptedRide.drop.latitude,
-                    longitude: acceptedRide.drop.longitude,
-                  };
-                  
-                  setNavigationStage('to_hospital');
-                  await startNavigation(hospitalDestination, 'to_hospital', currentDriverLocation);
-                  
-                  Alert.alert(
-                    'Patient Picked Up Successfully!', 
-                    'Navigation to the hospital has started. Please deliver the patient safely.',
-                    [
-                      {
-                        text: 'Continue to Hospital',
-                        onPress: () => {}
-                      }
-                    ]
-                  );
-                } catch (error) {
-                  console.error('Pickup verification failed:', error);
-                }
-              },
-            },
-          ],
-          'plain-text',
-          '',
-          'numeric'
+              text: 'Continue to Hospital',
+              onPress: () => {}
+            }
+          ]
         );
         
       } else if (stage === 'hospital_arrival') {
-        await updateRideStatus(acceptedRide._id, 'COMPLETED' as any);
+        await updateRideStatus(acceptedRide._id, 'DROPOFF_COMPLETE' as any);
         stopNavigation();
-        await clearPersistedRide();
         
-        Alert.alert('Trip Completed', 'Ride has been completed successfully!', [
+        Alert.alert('Arrived at Hospital', 'You have arrived at the hospital. Please confirm trip completion.', [
           {
             text: 'OK',
-            onPress: () => {
-              setTripStarted(false);
-              setAcceptedRide(null);
-              setRouteCoords([]);
-            }
+            onPress: () => {}
           }
         ]);
       }
@@ -241,7 +247,6 @@ export const useRiderLogic = () => {
     acceptedRide, 
     currentDriverLocation, 
     updateRideStatus,
-    verifyPickup,
     startNavigation, 
     stopNavigation, 
     handleApiError,
@@ -305,7 +310,7 @@ export const useRiderLogic = () => {
     acceptedRide,
     driverStats,
     driverProfile,
-    loading,
+    rideLoading,
     error,
     
     // Navigation state

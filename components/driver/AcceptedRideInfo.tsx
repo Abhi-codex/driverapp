@@ -1,9 +1,10 @@
 import { MaterialCommunityIcons, MaterialIcons, Octicons } from "@expo/vector-icons";
 import React, { memo, useEffect, useState } from "react";
-import { Alert, Linking, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { colors, styles } from "../../constants/tailwindStyles";
 import { Ride } from "../../types/rider";
 import { storage } from "../../utils/storage";
+import { ScrollView } from "react-native-gesture-handler";
 
 interface AcceptedRideInfoProps {
   acceptedRide: Ride | null;
@@ -43,7 +44,9 @@ const getAmbulanceTypeDetails = (type: string) => {
 const getStatusInfo = (status: string) => {
   const statusMap = {
     'START': { label: 'En Route to Patient', color: colors.warning[600], icon: 'car' },
-    'ARRIVED': { label: 'Arrived at Location', color: colors.primary[600], icon: 'map-marker-check' },
+    'ARRIVED': { label: 'Ambulance Has Arrived', color: colors.primary[600], icon: 'map-marker-check' },
+    'PICKUP_COMPLETE': { label: 'Patient Onboard - En Route to Hospital', color: colors.medical[500], icon: 'car-side' },
+    'DROPOFF_COMPLETE': { label: 'Arrived at Hospital', color: colors.medical[600], icon: 'hospital-building' },
     'COMPLETED': { label: 'Trip Completed', color: colors.medical[600], icon: 'check-circle' },
     'SEARCHING': { label: 'Request Accepted', color: colors.emergency[600], icon: 'ambulance' }
   };
@@ -161,7 +164,7 @@ function AcceptedRideInfo({
   };
 
   const handleDirections = () => {
-    if (!acceptedRide) return;
+    if (!acceptedRide?.pickup) return;
     
     const { latitude, longitude } = acceptedRide.pickup;
     const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
@@ -185,14 +188,23 @@ function AcceptedRideInfo({
     );
   }
 
+  // Additional check for ride data integrity
+  if (!acceptedRide.pickup || !acceptedRide.drop) {
+    return (
+      <View style={[styles.py6, styles.alignCenter]}>
+        <Text style={[styles.textLg, styles.textGray500]}>Loading ride details...</Text>
+      </View>
+    );
+  }
+
   const ambulanceDetails = getAmbulanceTypeDetails(acceptedRide.vehicle);
   const statusInfo = getStatusInfo(acceptedRide.status);
 
   return (
-    <ScrollView style={[styles.flex1]} showsVerticalScrollIndicator={false} bounces={false}>
+    <ScrollView style={[styles.mb4]}>
       {/* Clean Header */}
       <View style={[styles.mb4, styles.p4, styles.roundedLg, { backgroundColor: colors.gray[50] }]}> 
-        <View style={[styles.flexRow, styles.alignCenter, styles.justifyBetween, styles.mb3]}>
+        <View style={[styles.flexCol, styles.alignCenter, styles.justifyBetween, styles.mb3]}>
           <View style={[styles.flexRow, styles.alignCenter]}>
             <View style={[styles.w10, styles.h10, styles.roundedFull, styles.alignCenter, styles.justifyCenter, { backgroundColor: colors.emergency[100] }]}>
               <MaterialCommunityIcons name={statusInfo.icon as any} size={20} color={statusInfo.color} />
@@ -264,7 +276,7 @@ function AcceptedRideInfo({
             </Text>
           </View>
           <Text style={[styles.textSm, styles.textGray700]} numberOfLines={2}>
-            {acceptedRide.pickup.address}
+            {acceptedRide.pickup?.address || 'Pickup location not available'}
           </Text>
         </View>
 
@@ -277,7 +289,7 @@ function AcceptedRideInfo({
             </Text>
           </View>
           <Text style={[styles.textSm, styles.textGray700]} numberOfLines={2}>
-            {acceptedRide.drop.address}
+            {acceptedRide.drop?.address || 'Destination not available'}
           </Text>
         </View>
       </View>

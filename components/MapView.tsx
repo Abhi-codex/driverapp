@@ -433,7 +433,13 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
 
         const url = `https://maps.googleapis.com/maps/api/staticmap?center=${center.latitude},${center.longitude}&zoom=13&size=200x200&key=${apiKey}`;
         console.log('Static map probe URL:', url.replace(/key=.*$/, 'key=REDACTED'));
-        const resp = await fetch(url);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        
+        const resp = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
         if (resp.ok) {
           setStaticApiStatus('ok');
         } else {

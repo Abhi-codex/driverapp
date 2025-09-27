@@ -64,7 +64,7 @@ export const useAuthenticatedRequest = () => {
   }, []);
 
   // Main authenticated request function
-  const makeAuthenticatedRequest = useCallback(async (url: string, options: RequestInit = {}, timeout: number = 10000) => {
+  const makeAuthenticatedRequest = useCallback(async (url: string, options: RequestInit = {}, timeout: number = 20000, retries: number = 2) => {
     // Get access token for authentication
     const token = await AsyncStorage.getItem("access_token");
     
@@ -72,62 +72,74 @@ export const useAuthenticatedRequest = () => {
       throw new Error('No authentication token found');
     }
 
-    // Add timeout to prevent hanging requests
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    let lastError: any;
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-        signal: controller.signal,
-      });
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      clearTimeout(timeoutId);
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            ...options.headers,
+          },
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Try to refresh token
-          const refreshed = await refreshAuthToken();
-          if (refreshed) {
-            // Retry the original request with new token
-            const newToken = await AsyncStorage.getItem("access_token");
-            const retryResponse = await fetch(url, {
-              ...options,
-              headers: {
-                'Authorization': `Bearer ${newToken}`,
-                'Content-Type': 'application/json',
-                ...options.headers,
-              },
-            });
+        clearTimeout(timeoutId);
 
-            if (!retryResponse.ok) {
-              throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`);
+        if (!response.ok) {
+          if (response.status === 401) {
+            // Try to refresh token
+            const refreshed = await refreshAuthToken();
+            if (refreshed) {
+              // Retry the original request with new token
+              const newToken = await AsyncStorage.getItem("access_token");
+              const retryResponse = await fetch(url, {
+                ...options,
+                headers: {
+                  'Authorization': `Bearer ${newToken}`,
+                  'Content-Type': 'application/json',
+                  ...options.headers,
+                },
+              });
+
+              if (!retryResponse.ok) {
+                throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`);
+              }
+
+              return await retryResponse.json();
             }
-
-            return await retryResponse.json();
+            throw new Error('Authentication failed');
           }
-          throw new Error('Authentication failed');
+          
+          const errorData = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorData || response.statusText}`);
+        }
+
+        return await response.json();
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        lastError = error;
+
+        if (error.name === 'AbortError') {
+          if (attempt < retries) {
+            console.log(`Request timeout, retrying (${attempt + 1}/${retries})...`);
+            continue;
+          }
+          throw new Error('Request timeout - please check your connection');
         }
         
-        const errorData = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorData || response.statusText}`);
+        // For non-timeout errors, don't retry
+        throw error;
       }
-
-      return await response.json();
-    } catch (error: any) {
-      clearTimeout(timeoutId);
-      
-      if (error.name === 'AbortError') {
-        throw new Error('Request timeout - please check your connection');
-      }
-      
-      throw error;
     }
+
+    throw lastError;
   }, [refreshAuthToken]);
 
   // Utility functions

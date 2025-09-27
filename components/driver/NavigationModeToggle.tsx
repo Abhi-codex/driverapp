@@ -88,13 +88,6 @@ export const NavigationModeToggle: React.FC<NavigationModeToggleProps> = ({
             ]}
           />
         </View>
-        
-        <MaterialIcons 
-          name="chevron-right" 
-          size={16} 
-          color={colors.gray[400]} 
-          style={[styles.ml2]}
-        />
       </View>
     </TouchableOpacity>
   );
