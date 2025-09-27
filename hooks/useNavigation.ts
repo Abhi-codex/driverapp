@@ -9,38 +9,8 @@ export const useNavigation = () => {
   const [currentRoute, setCurrentRoute] = useState<RouteInfo | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
   const [navigationStage, setNavigationStage] = useState<'idle' | 'to_patient' | 'to_hospital'>('idle');
-  const [navigationMode, setNavigationMode] = useState<'in-app' | 'external'>('external'); 
-  
+
   const [navigationService] = useState(() => NavigationService.getInstance());
-
-  // Load navigation preference from storage
-  const loadNavigationPreference = useCallback(async () => {
-    try {
-      const storedMode = await AsyncStorage.getItem('navigation_mode');
-      if (storedMode && (storedMode === 'in-app' || storedMode === 'external')) {
-        setNavigationMode(storedMode);
-      }
-    } catch (error) {
-      console.error('Failed to load navigation preference:', error);
-    }
-  }, []);
-
-  // Save navigation preference
-  const saveNavigationPreference = useCallback(async (mode: 'in-app' | 'external') => {
-    try {
-      await AsyncStorage.setItem('navigation_mode', mode);
-      console.log('Navigation preference saved:', mode);
-    } catch (error) {
-      console.error('Failed to save navigation preference:', error);
-    }
-  }, []);
-
-  // Toggle navigation mode
-  const toggleNavigationMode = useCallback(() => {
-    const newMode = navigationMode === 'in-app' ? 'external' : 'in-app';
-    setNavigationMode(newMode);
-    saveNavigationPreference(newMode);
-  }, [navigationMode, saveNavigationPreference]);
 
   // Start navigation
   const startNavigation = useCallback(async (
@@ -60,26 +30,8 @@ export const useNavigation = () => {
       setNavigationStage(stage);
       setIsNavigating(true);
 
-      // Use hybrid navigation approach
-      if (navigationMode === 'external') {
-        // Launch external navigation app
-        const success = await navigationService.launchExternalNavigation(
-          currentLocation,
-          targetDestination,
-          stage
-        );
-        
-        if (!success) {
-          // Fallback to in-app navigation
-          console.log('External navigation failed, falling back to in-app');
-          await startInAppNavigation(currentLocation, targetDestination, stage);
-        } else {
-          console.log('External navigation launched successfully');
-        }
-      } else {
-        // Use in-app navigation
-        await startInAppNavigation(currentLocation, targetDestination, stage);
-      }
+      // Always use in-app navigation
+      await startInAppNavigation(currentLocation, targetDestination, stage);
 
       // Persist navigation state
       await AsyncStorage.setItem('navigation_stage', stage);
@@ -91,7 +43,7 @@ export const useNavigation = () => {
       setIsNavigating(false);
       setNavigationStage('idle');
     }
-  }, [navigationService, navigationMode]);
+  }, [navigationService]);
 
   // Start in-app navigation
   const startInAppNavigation = useCallback(async (
@@ -110,16 +62,28 @@ export const useNavigation = () => {
       setCurrentRoute(route);
       
       // Extract coordinates from route steps
-      const coordinates = route.steps.reduce((coords, step) => {
-        coords.push(step.startLocation);
+      let coordinates = route.steps.reduce((coords, step) => {
+        if (step && step.startLocation) coords.push(step.startLocation);
         return coords;
       }, [] as Array<{ latitude: number; longitude: number }>);
-      
-      // Add the final destination
-      if (route.steps.length > 0) {
+
+      // Add the final destination if available
+      if (route.steps.length > 0 && route.steps[route.steps.length - 1].endLocation) {
         coordinates.push(route.steps[route.steps.length - 1].endLocation);
       }
-      
+
+      // If steps didn't yield coordinates, fall back to decoding the overview polyline
+      if ((!coordinates || coordinates.length === 0) && route.polyline) {
+        try {
+          const decoded = decodePolyline(route.polyline);
+          if (decoded && decoded.length > 0) {
+            coordinates = decoded;
+          }
+        } catch (err) {
+          console.warn('Failed to decode overview polyline', err);
+        }
+      }
+
       setRouteCoords(coordinates);
       
       console.log('In-app navigation route calculated:', {
@@ -133,6 +97,39 @@ export const useNavigation = () => {
       throw error;
     }
   }, [navigationService]);
+
+  // Decode an encoded polyline string (Google polyline algorithm)
+  const decodePolyline = (encoded: string) => {
+    if (!encoded) return [] as Array<{ latitude: number; longitude: number }>;
+    const coords: Array<{ latitude: number; longitude: number }> = [];
+    let index = 0, len = encoded.length;
+    let lat = 0, lng = 0;
+
+    while (index < len) {
+      let b, shift = 0, result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const deltaLat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+      lat += deltaLat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const deltaLng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+      lng += deltaLng;
+
+      coords.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
+    }
+
+    return coords;
+  };
 
   // Stop navigation
   const stopNavigation = useCallback(async () => {
@@ -213,9 +210,8 @@ export const useNavigation = () => {
 
   // Initialize navigation preferences and state
   useEffect(() => {
-    loadNavigationPreference();
     loadPersistedNavigationState();
-  }, [loadNavigationPreference, loadPersistedNavigationState]);
+  }, [loadPersistedNavigationState]);
 
   return {
     // State
@@ -224,15 +220,17 @@ export const useNavigation = () => {
     currentRoute,
     isNavigating,
     navigationStage,
-    navigationMode,
+    navigationMode: 'in-app',
     
     // Actions
     startNavigation,
     stopNavigation,
     handleStageComplete,
-    toggleNavigationMode,
-    saveNavigationPreference,
-    loadNavigationPreference,
+    // Provide a noop toggle to preserve API surface
+    toggleNavigationMode: () => {
+      console.log('Navigation mode is fixed to in-app');
+    },
+    saveNavigationPreference: async (_mode: any) => {},
     
     // Manual state setters (for external updates)
     setRouteCoords,
@@ -240,6 +238,6 @@ export const useNavigation = () => {
     setCurrentRoute,
     setIsNavigating,
     setNavigationStage,
-    setNavigationMode,
+    setNavigationMode: (_v:any) => {},
   };
 };

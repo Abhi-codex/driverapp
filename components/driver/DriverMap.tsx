@@ -51,6 +51,9 @@ function DriverMap({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   const mapRef = useRef<any>(null);
+  const miniMapRef = useRef<any>(null);
+  const prevLocationRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const [heading, setHeading] = useState<number>(0);
   
   // Enhanced route visualization states
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -306,19 +309,170 @@ function DriverMap({
       mapRef.current.animateToRegion({
         latitude: stableDriverLocation.latitude,
         longitude: stableDriverLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
+        latitudeDelta: 0.003,
+        longitudeDelta: 0.003,
       }, 500);
       setFollowUserLocation(true);
     }
   };
+
+  // Aggressive follow: when navigating and followUserLocation is true, always animate
+  // the main map to center on the driver's latest location with a tight zoom.
+  useEffect(() => {
+    if (!isNavigating || !stableDriverLocation || !mapRef.current || !followUserLocation) return;
+
+    try {
+      // Bias center slightly toward the next route point or destination so the driver
+      // stays visually central while the road ahead is visible (Google Maps-like behavior)
+  const bias = 0.03;
+   // 0 = driver exactly centered, 1 = center at destination (reduced to focus more on driver)
+
+      let targetLat = stableDriverLocation.latitude;
+      let targetLng = stableDriverLocation.longitude;
+
+      // Determine a point to bias towards: prefer next route coordinate, then destinationCoord
+      const nextPoint = (routeCoords && routeCoords.length > 0) ? routeCoords[0] : null;
+      const biasTarget = nextPoint || destinationCoord || null;
+
+      if (biasTarget) {
+        targetLat = stableDriverLocation.latitude + (biasTarget.latitude - stableDriverLocation.latitude) * bias;
+        targetLng = stableDriverLocation.longitude + (biasTarget.longitude - stableDriverLocation.longitude) * bias;
+      }
+
+      // compute heading from previous location -> current location
+      try {
+        const prev = prevLocationRef.current;
+        if (prev && stableDriverLocation) {
+          const bearing = getBearing(prev.latitude, prev.longitude, stableDriverLocation.latitude, stableDriverLocation.longitude);
+          setHeading(bearing);
+
+          // animate camera with heading if available
+          if (mapRef.current.animateCamera) {
+            mapRef.current.animateCamera({
+              center: { latitude: targetLat, longitude: targetLng },
+              heading: bearing,
+              pitch: 45,
+              zoom: undefined,
+            }, { duration: 300 });
+            } else {
+            // fallback
+            mapRef.current.animateToRegion({
+              latitude: targetLat,
+              longitude: targetLng,
+              latitudeDelta: 0.0003, // tighter zoom for stronger driver focus
+              longitudeDelta: 0.0003,
+            }, 300);
+          }
+        } else {
+          // no previous location - simple animate
+          mapRef.current.animateToRegion({
+            latitude: targetLat,
+            longitude: targetLng,
+            latitudeDelta: 0.003,
+            longitudeDelta: 0.003,
+          }, 300);
+        }
+      } catch (err) {
+        console.warn('DriverMap: animateToRegion/animateCamera failed', err);
+      }
+    } catch (err) {
+      console.warn('DriverMap: animateToRegion failed', err);
+    }
+  }, [stableDriverLocation, isNavigating, followUserLocation]);
+
+  // Update prevLocationRef after camera animation (keep latest known)
+  useEffect(() => {
+    if (stableDriverLocation) prevLocationRef.current = stableDriverLocation;
+  }, [stableDriverLocation]);
+
+  // Helper: calculate bearing between two lat/lng points in degrees
+  const getBearing = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const toDeg = (r: number) => (r * 180) / Math.PI;
+
+    const φ1 = toRad(lat1);
+    const φ2 = toRad(lat2);
+    const λ1 = toRad(lon1);
+    const λ2 = toRad(lon2);
+
+    const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+    const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+    const θ = Math.atan2(y, x);
+    const bearing = (toDeg(θ) + 360) % 360;
+    return Math.round(bearing);
+  };
+
+  // Compute the current navigation destination coordinate (patient or hospital)
+  const destinationCoord = useMemo(() => {
+    if (!stableAcceptedRide) return null;
+    if (navigationStage === 'to_patient' && stableAcceptedRide.pickup) return stableAcceptedRide.pickup;
+    if (navigationStage === 'to_hospital' && stableAcceptedRide.drop) return stableAcceptedRide.drop;
+    // fallback to drop then pickup
+    return stableAcceptedRide.drop || stableAcceptedRide.pickup || null;
+  }, [stableAcceptedRide, navigationStage]);
+
+  // Keep the map view focused on the driver and destination while navigating.
+  // We use fitToCoordinates to ensure both the driver's location and the destination are visible.
+  useEffect(() => {
+    try {
+      if (!isNavigating || !mapRef.current) return;
+
+      // prefer destinationCoord if available, otherwise use routeCoords endpoints
+      const coordsToFit: Array<{ latitude: number; longitude: number }> = [];
+
+      if (destinationCoord) {
+        coordsToFit.push(destinationCoord);
+      }
+
+      if (routeCoords && routeCoords.length > 0) {
+        coordsToFit.push(routeCoords[0]);
+        coordsToFit.push(routeCoords[routeCoords.length - 1]);
+      }
+
+      // only fit the map when route or destination changes to avoid overriding
+      // the aggressive follow/animateToRegion that's triggered on every driver update
+      if (coordsToFit.length >= 1 && mapRef.current.fitToCoordinates) {
+        mapRef.current.fitToCoordinates(coordsToFit, {
+          edgePadding: { top: 20, right: 100, bottom: 200, left: 100 },
+          animated: true,
+        });
+        setFollowUserLocation(true);
+      }
+    } catch (err) {
+      console.warn('DriverMap: fitToCoordinates failed', err);
+    }
+  }, [isNavigating, routeCoords, destinationCoord]);
+
+  // Ensure the mini-map inset fits the full API route when route changes
+  useEffect(() => {
+    if (!miniMapRef.current) return;
+    try {
+      if (routeCoords && routeCoords.length > 1 && miniMapRef.current.fitToCoordinates) {
+        miniMapRef.current.fitToCoordinates(routeCoords, {
+          edgePadding: { top: 8, right: 8, bottom: 8, left: 8 },
+          animated: false,
+        });
+        return;
+      }
+
+      if (destinationCoord && stableDriverLocation && miniMapRef.current.fitToCoordinates) {
+        miniMapRef.current.fitToCoordinates([stableDriverLocation, destinationCoord], {
+          edgePadding: { top: 8, right: 8, bottom: 8, left: 8 },
+          animated: false,
+        });
+      }
+    } catch (err) {}
+  }, [miniMapRef, routeCoords, destinationCoord, stableDriverLocation]);
 
   return (
     <View style={[styles.flex1]}>
       <MapView
         ref={mapRef}
         style={[styles.flex1]}
-        region={mapRegion}
+  {...(!isNavigating ? { region: mapRegion } : {})}
+  // Hide the built-in map controls for a cleaner driving UI
+  showMapTypeSelector={false}
+  showFeatureControls={false}
         showsUserLocation={true}
         followsUserLocation={followUserLocation}
         showsMyLocationButton={true}
@@ -339,14 +493,45 @@ function DriverMap({
           setShowFallback(true);
         }}
       >
-        {/* Driver's current location marker */}
+        {/* Driver's current location marker with directional arrow */}
         {stableDriverLocation && (
           <Marker
             coordinate={stableDriverLocation}
             title="Your Location"
-            pinColor={colors.primary[600]}
             type="driver"
-          />
+          >
+            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+              {/* Outer white ring for contrast */}
+              <View style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: 'white',
+                alignItems: 'center',
+                justifyContent: 'center',
+                elevation: 3,
+                shadowColor: '#000',
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
+                shadowOffset: { width: 0, height: 2 }
+              }}>
+                {/* Colored driver circle */}
+                <View style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
+                  backgroundColor: colors.primary[600],
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {/* Arrow icon rotated by heading */}
+                  <View style={{ transform: [{ rotate: `${heading || 0}deg` }] }}>
+                    <MaterialCommunityIcons name="navigation" size={18} color="white" />
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Marker>
         )}
 
         {/* Accepted ride markers and route */}
@@ -390,6 +575,17 @@ function DriverMap({
                 ))}
               </>
             )}
+
+            {/* Fallback: if navigating but we don't have routeCoords yet, draw a straight
+                polyline between driver and destination so drivers can see the intended path */}
+            {isNavigating && routeCoords.length === 0 && destinationCoord && stableDriverLocation && (
+              <Polyline
+                coordinates={[stableDriverLocation, destinationCoord]}
+                strokeColor={colors.primary[400]}
+                strokeWidth={4}
+                lineDashPattern={[6, 6]}
+              />
+            )}
             
             {/* Turn indicators and maneuver markers */}
             {turnMarkers.map((marker) => (
@@ -429,64 +625,39 @@ function DriverMap({
           />
         ))}
       </MapView>
-      
-      {/* Floating recenter button (Google Maps style) */}
-      <TouchableOpacity
-        style={{
-          position: 'absolute',
-          right: 20,
-          bottom: 120,
-          backgroundColor: 'white',
-          borderRadius: 25,
-          width: 50,
-          height: 50,
-          justifyContent: 'center',
-          alignItems: 'center',
-          elevation: 5,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.25,
-          shadowRadius: 4,
-          borderWidth: 1,
-          borderColor: colors.gray[200]
-        }}
-        onPress={recenterOnUserLocation}
-      >
-        <MaterialCommunityIcons
-          name="crosshairs-gps"
-          size={24}
-          color={followUserLocation ? colors.primary[600] : colors.gray[600]}
-        />
-      </TouchableOpacity>
-      
-      {/* Speed indicator (if navigating) */}
-      {isNavigating && (
-        <View style={{
-          position: 'absolute',
-          left: 20,
-          bottom: 120,
-          backgroundColor: 'white',
-          borderRadius: 15,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          elevation: 5,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.25,
-          shadowRadius: 4,
-          borderWidth: 1,
-          borderColor: colors.gray[200]
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <MaterialCommunityIcons
-              name="speedometer"
-              size={16}
-              color={colors.primary[600]}
-            />
-            <Text style={[styles.textSm, styles.fontMedium, styles.ml1]}>
-              GPS Ready
-            </Text>
-          </View>
+
+      {/* Mini-map inset: non-interactive preview showing destination + driver while navigating */}
+      {isNavigating && destinationCoord && stableDriverLocation && (
+        <View style={{ position: 'absolute', top: 16, right: 16, width: 140, height: 120, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0,0,0,0.12)', backgroundColor: 'white' }} pointerEvents="none">
+          <MapView
+            ref={miniMapRef}
+            style={{ flex: 1 }}
+            initialRegion={{
+              latitude: (stableDriverLocation.latitude + destinationCoord.latitude) / 2,
+              longitude: (stableDriverLocation.longitude + destinationCoord.longitude) / 2,
+              latitudeDelta: Math.max(Math.abs(stableDriverLocation.latitude - destinationCoord.latitude) * 1.5, 0.01),
+              longitudeDelta: Math.max(Math.abs(stableDriverLocation.longitude - destinationCoord.longitude) * 1.5, 0.01),
+            }}
+            showsUserLocation={false}
+            showsCompass={false}
+            showsScale={false}
+            scrollEnabled={false}
+            zoomEnabled={false}
+            pitchEnabled={false}
+            rotateEnabled={false}
+          >
+            {/* driver marker */}
+            <Marker coordinate={stableDriverLocation} title="You" pinColor={colors.primary[600]} type="driver" />
+            {/* destination marker - show hospital for to_hospital stage */}
+            <Marker coordinate={destinationCoord} title={navigationStage === 'to_hospital' ? 'Hospital' : 'Destination'} pinColor={navigationStage === 'to_hospital' ? colors.medical[600] : colors.danger[600]} type={navigationStage === 'to_hospital' ? 'hospital' : 'patient'} />
+
+            {/* Render the full API route in the mini-map when available; otherwise fallback */}
+            {routeCoords && routeCoords.length > 0 ? (
+              <Polyline coordinates={routeCoords} strokeColor={colors.primary[600]} strokeWidth={4} />
+            ) : (
+              <Polyline coordinates={[stableDriverLocation, destinationCoord]} strokeColor={colors.primary[400]} strokeWidth={3} lineDashPattern={[4,4]} />
+            )}
+          </MapView>
         </View>
       )}
     </View>

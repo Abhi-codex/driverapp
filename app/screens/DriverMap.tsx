@@ -299,33 +299,16 @@ export default function DriverMapScreen() {
     // Cleanup location subscription on unmount
     return () => {
       if (locationSubscription) {
-        locationSubscription.remove();
-        console.log('🧹 Location subscription cleaned up');
+        try {
+          locationSubscription.remove();
+        } catch (err) {
+          console.warn('Failed to remove location subscription', err);
+        }
+        console.log('🧭 Location subscription cleaned up');
       }
     };
   }, [initializeLocationTracking]);
-  
-  // Check online status and redirect if offline
-  useEffect(() => {
-    // Only show the alert if the system is initialized and the user is actually offline
-    if (!loading && isInitialized && !online) {
-      Alert.alert(
-        'Offline Mode',
-        'You are currently offline. Please go online to accept rides.',
-        [
-          { text: 'Go Back', onPress: () => router.back() },
-          { 
-            text: 'Go Online', 
-            onPress: async () => {
-              await toggleOnline();
-            }
-          }
-        ]
-      );
-    }
-  }, [online, loading, isInitialized, toggleOnline, router]);
 
-  // Handle app state changes to detect when returning from external navigation
   useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
       if (nextAppState === 'active' && acceptedRide && driverLocation) {
@@ -346,16 +329,6 @@ export default function DriverMapScreen() {
                   text: 'Use In-App Navigation', 
                   onPress: () => {
                     console.log('🗺️ Starting in-app navigation to hospital');
-                    handleNavigationStart({ 
-                      latitude: acceptedRide.drop.latitude, 
-                      longitude: acceptedRide.drop.longitude 
-                    }, 'to_hospital');
-                  }
-                },
-                { 
-                  text: 'Use Google Maps', 
-                  onPress: () => {
-                    console.log('🗺️ Starting Google Maps navigation to hospital');
                     handleNavigationStart({ 
                       latitude: acceptedRide.drop.latitude, 
                       longitude: acceptedRide.drop.longitude 
@@ -456,7 +429,6 @@ export default function DriverMapScreen() {
           isNavigating={isNavigating}
           navigationStage={navigationStage}
           currentRoute={currentRoute}
-          navigationMode={navigationMode}
           onNavigationStart={handleNavigationStart}
           onNavigationStop={stopNavigation}
           onStageComplete={handleStageCompleteWrapper}

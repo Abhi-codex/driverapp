@@ -68,6 +68,8 @@ interface MapViewWrapperProps {
   showFeatureControls?: boolean;
   // Google Maps-like features
   ref?: React.RefObject<any>;
+  // Override style for the controls (positioning of the gear button / controls panel)
+  controlsStyle?: any;
   showsMyLocationButton?: boolean;
   loadingEnabled?: boolean;
   onUserLocationChange?: (event: any) => void;
@@ -151,6 +153,8 @@ interface MapControlsProps {
   onThemeChange: (theme: string) => void;
   isVisible: boolean;
   onToggle: () => void;
+  // optional override for positioning the controls container
+  controlsStyle?: any;
 }
 
 // Helper function to render icons
@@ -178,28 +182,15 @@ const MapControls: React.FC<MapControlsProps> = ({
   onThemeChange,
   isVisible,
   onToggle,
+  controlsStyle
 }) => {
   // Get current theme colors
   const currentTheme = theme === 'night' ? mapControlThemes.dark : mapControlThemes.light;
   
   return (
-    <View style={[styles.absolute, { top: 16, right: 16, zIndex: 50 }]}>
-      {/* Toggle Button */}
-      <TouchableOpacity
-        onPress={onToggle}
-        style={[
-          styles.roundedFull, styles.shadowSm, styles.p2, styles.mb2,
-          { backgroundColor: currentTheme.toggleButton, elevation: 5, borderWidth: 1, borderColor: currentTheme.border }
-        ]}
-      >
-        <Fontisto 
-          name={isVisible ? "close" : "player-settings"} 
-          size={24} 
-          color={currentTheme.textSecondary} 
-        />
-      </TouchableOpacity>
+    <View style={[styles.absolute, { top: 16, right: 16, zIndex: 50 }, controlsStyle]}>
 
-      {/* Controls Panel - Only show when visible */}
+      {/* Controls Panel - Only show when requested */}
       {isVisible && (
         <>
           {/* Map Type Selector */}
@@ -517,6 +508,7 @@ export const MapViewWrapper: React.FC<MapViewWrapperProps> = (props) => {
           onThemeChange={handleThemeChange}
           isVisible={controlsVisible}
           onToggle={toggleControls}
+          controlsStyle={props.controlsStyle}
         />
       )}
 

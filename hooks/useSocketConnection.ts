@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import io, { Socket } from 'socket.io-client';
+import io from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ride } from '../types/rider';
 import { getServerUrl } from '../utils/network';
@@ -7,26 +7,27 @@ import { getServerUrl } from '../utils/network';
 interface SocketEvents {
   onRideUpdate?: (ride: Ride) => void;
   onRideCancelled?: (ride: Ride, cancelledBy: string, message: string) => void;
-  onRideNotification?: (data: { type: string; message: string; ride?: Ride }) => void;
+  onRideNotification?: (data: { type: string; message: string; ride?: Ride; data?: any }) => void;
 }
 
 export const useSocketConnection = (events: SocketEvents = {}) => {
   const [socket, setSocket] = useState<any | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const socketRef = useRef<any | null>(null);
+  // Guard to prevent multiple concurrent connect attempts
+  const connectingRef = useRef(false);
   const pendingSubscriptions = useRef<Set<string>>(new Set());
 
   // Connect to Socket.IO server
   const connectSocket = useCallback(async () => {
     try {
-      // Prevent multiple connections
-      if (socketRef.current && isSocketConnected) {
-        console.log('📡 Socket already connected, skipping connection attempt');
+      // Prevent multiple connections or concurrent connection attempts
+      if (socketRef.current || connectingRef.current) {
+        console.log('📡 Socket already connected or connecting, skipping connection attempt');
         return;
       }
 
       const token = await AsyncStorage.getItem('access_token');
-      
       if (!token) {
         console.log('📡 No access token found, skipping socket connection');
         return;
@@ -41,13 +42,12 @@ export const useSocketConnection = (events: SocketEvents = {}) => {
       console.log('📡 Connecting to Socket.IO server:', serverUrl);
       console.log('📡 Using auth.token and query.token for authentication');
 
+      // mark as connecting to avoid races
+      connectingRef.current = true;
+
       const newSocket = io(serverUrl, {
-        auth: {
-          token: token
-        },
-        query: {
-          token: token
-        },
+        auth: { token },
+        query: { token },
         transports: ['websocket', 'polling'],
         timeout: 20000,
       });
@@ -58,6 +58,8 @@ export const useSocketConnection = (events: SocketEvents = {}) => {
         setIsSocketConnected(true);
         setSocket(newSocket);
         socketRef.current = newSocket;
+        // connected -> no longer connecting
+        connectingRef.current = false;
 
         // Process any pending subscriptions
         if (pendingSubscriptions.current.size > 0) {
@@ -72,40 +74,47 @@ export const useSocketConnection = (events: SocketEvents = {}) => {
       newSocket.on('disconnect', (reason) => {
         console.log('📡 Socket.IO disconnected:', reason);
         setIsSocketConnected(false);
+        // ensure connecting flag reset when socket disconnects
+        connectingRef.current = false;
+        // clear refs for safety
+        socketRef.current = null;
+        setSocket(null);
       });
 
       newSocket.on('connect_error', (error) => {
         console.error('📡 Socket.IO connection error:', error);
-        console.error('📡 Error message:', error.message);
-        console.error('📡 Error description:', error.description);
-        console.error('📡 Error context:', error.context);
+        console.error('📡 Error message:', (error as any).message);
+        console.error('📡 Error description:', (error as any).description);
+        console.error('📡 Error context:', (error as any).context);
         setIsSocketConnected(false);
+        // reset connecting flag on connect error
+        connectingRef.current = false;
       });
 
       // Ride events
       newSocket.on('rideUpdate', (data) => {
-        console.log('📡 Ride update received:', data);
+        console.log('📡 Ride update received:', JSON.stringify(data, null, 2));
         if (events.onRideUpdate && data.ride) {
           events.onRideUpdate(data.ride);
         }
       });
 
       newSocket.on('rideNotification', (data) => {
-        console.log('📡 Ride notification received:', data);
+        console.log('📡 Ride notification received:', JSON.stringify(data, null, 2));
         if (events.onRideNotification) {
           events.onRideNotification(data);
         }
       });
 
       newSocket.on('rideCancelled', (data) => {
-        console.log('📡 Ride cancelled received:', data);
+        console.log('📡 Ride cancelled received:', JSON.stringify(data, null, 2));
         if (events.onRideCancelled && data.ride) {
           events.onRideCancelled(data.ride, data.cancelledBy, data.message);
         }
       });
-
     } catch (error) {
       console.error('📡 Failed to initialize socket connection:', error);
+      connectingRef.current = false;
     }
   }, [events]);
 
@@ -117,6 +126,7 @@ export const useSocketConnection = (events: SocketEvents = {}) => {
       socketRef.current = null;
       setSocket(null);
       setIsSocketConnected(false);
+      connectingRef.current = false;
     }
   }, []);
 

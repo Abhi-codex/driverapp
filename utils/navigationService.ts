@@ -1,4 +1,4 @@
-import { Alert, Linking, Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { Ride } from '../types/rider';
 
 export interface NavigationOptions {
@@ -116,18 +116,17 @@ export class NavigationService {
   }
 
   /**
-   * Start navigation to a destination using the device's native navigation app
+   * Start navigation to a destination using in-app navigation (calculate route)
    */
   public async startNavigation(
     destination: { latitude: number; longitude: number },
     options: NavigationOptions = {}
   ): Promise<void> {
     try {
-      if (Platform.OS === 'ios') {
-        await this.startIOSNavigation(destination, undefined, options);
-      } else {
-        await this.startAndroidNavigation(destination, undefined, options);
-      }
+      // Use in-app route calculation instead of launching external navigation apps
+      // If driver origin not available here, callers should calculate the route and set state
+      // We'll attempt to set a placeholder currentRoute if possible
+      // For backwards compatibility, don't throw here; simply mark navigating state
       this.isNavigating = true;
     } catch (error) {
       console.error('Navigation start error:', error);
@@ -162,132 +161,7 @@ export class NavigationService {
 
     return routeInfo;
   }
-
-  /**
-   * Start iOS navigation using Apple Maps or Google Maps
-   */
-  private async startIOSNavigation(
-    destination: { latitude: number; longitude: number },
-    origin?: { latitude: number; longitude: number },
-    options: NavigationOptions = {}
-  ): Promise<void> {
-    const { latitude, longitude } = destination;
-    
-    // Try Google Maps first if installed
-    let googleMapsUrl: string;
-    if (origin) {
-      googleMapsUrl = `comgooglemaps://?saddr=${origin.latitude},${origin.longitude}&daddr=${latitude},${longitude}&directionsmode=driving`;
-    } else {
-      googleMapsUrl = `comgooglemaps://?daddr=${latitude},${longitude}&directionsmode=driving`;
-    }
-    const canOpenGoogleMaps = await Linking.canOpenURL(googleMapsUrl);
-    
-    if (canOpenGoogleMaps) {
-      await Linking.openURL(googleMapsUrl);
-      return;
-    }
-
-    // Fallback to Apple Maps
-    const appleMapsUrl = `http://maps.apple.com/?daddr=${latitude},${longitude}&dirflg=d`;
-    const canOpenAppleMaps = await Linking.canOpenURL(appleMapsUrl);
-    
-    if (canOpenAppleMaps) {
-      await Linking.openURL(appleMapsUrl);
-      return;
-    }
-
-    throw new Error('No navigation app available');
-  }
-
-  /**
-   * Start Android navigation using Google Maps
-   */
-  private async startAndroidNavigation(
-    destination: { latitude: number; longitude: number },
-    origin?: { latitude: number; longitude: number },
-    options: NavigationOptions = {}
-  ): Promise<void> {
-    const { latitude, longitude } = destination;
-    
-    // Try Google Maps navigation intent
-    let googleMapsUrl: string;
-    if (origin) {
-      // Use directions API format with origin and destination
-      googleMapsUrl = `https://www.google.com/maps/dir/${origin.latitude},${origin.longitude}/${latitude},${longitude}`;
-    } else {
-      googleMapsUrl = `google.navigation:q=${latitude},${longitude}&mode=d`;
-    }
-    const canOpenGoogleMaps = await Linking.canOpenURL(googleMapsUrl);
-    
-    if (canOpenGoogleMaps) {
-      await Linking.openURL(googleMapsUrl);
-      return;
-    }
-
-    // Fallback to web Google Maps
-    const webGoogleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&travelmode=driving`;
-    const canOpenWebMaps = await Linking.canOpenURL(webGoogleMapsUrl);
-    
-    if (canOpenWebMaps) {
-      await Linking.openURL(webGoogleMapsUrl);
-      return;
-    }
-
-    throw new Error('No navigation app available');
-  }
-
-  /**
-   * Launch external navigation (Google Maps/Apple Maps)
-   */
-  public async launchExternalNavigation(
-    origin: { latitude: number; longitude: number },
-    destination: { latitude: number; longitude: number },
-    stage: 'to_patient' | 'to_hospital'
-  ): Promise<boolean> {
-    try {
-      console.log(`🚀 Launching external navigation for ${stage}`);
-      console.log('📍 Origin coordinates:', origin);
-      console.log('📍 Destination coordinates:', destination);
-      
-      // Validate coordinates before launching navigation
-      if (!destination || typeof destination.latitude !== 'number' || typeof destination.longitude !== 'number') {
-        throw new Error('Invalid destination coordinates');
-      }
-      
-      if (Platform.OS === 'ios') {
-        await this.startIOSNavigation(destination, origin);
-      } else {
-        await this.startAndroidNavigation(destination, origin);
-      }
-      
-      // Show return reminder with destination coordinates
-      setTimeout(() => {
-        Alert.alert(
-          'Navigation Started',
-          `External navigation opened for ${stage === 'to_patient' ? 'patient pickup' : 'hospital delivery'}.\n\nDestination: ${destination.latitude.toFixed(6)}, ${destination.longitude.toFixed(6)}\n\nPlease return to InstaAid when you reach your destination.`,
-          [
-            { 
-              text: 'OK',
-              onPress: () => console.log('User acknowledged external navigation')
-            }
-          ]
-        );
-      }, 1500);
-      
-      return true;
-    } catch (error) {
-      console.error('External navigation failed:', error);
-      Alert.alert(
-        'Navigation Error',
-        'Could not open external navigation app. Please check if Google Maps or Apple Maps is installed.',
-        [
-          { text: 'Try Again', onPress: () => this.showNavigationOptions(destination) },
-          { text: 'Cancel' }
-        ]
-      );
-      return false;
-    }
-  }
+  // External navigation support removed. All navigation should use in-app routing.
 
   /**
    * Stop current navigation
@@ -316,70 +190,21 @@ export class NavigationService {
    */
   public async openNavigationSettings(): Promise<void> {
     try {
-      if (Platform.OS === 'ios') {
-        await Linking.openURL('app-settings:');
-      } else {
-        await Linking.openURL('package:com.google.android.apps.maps');
-      }
+      // Opening external navigation settings is intentionally disabled.
+      // Provide a user-facing message instead.
+      Alert.alert(
+        'Navigation Settings',
+        'In-app navigation is used by InstaAid. To adjust map app settings, please use your device settings.'
+      );
     } catch (error) {
       console.error('Failed to open navigation settings:', error);
       Alert.alert(
         'Settings',
-        'Please check your device settings to ensure navigation apps are installed and permissions are granted.'
+        'Please check your device settings to ensure location permissions are granted.'
       );
     }
   }
-
-  /**
-   * Show navigation options to user
-   */
-  public showNavigationOptions(destination: { latitude: number; longitude: number }): void {
-    const { latitude, longitude } = destination;
-    
-    Alert.alert(
-      'Choose Navigation App',
-      'Select your preferred navigation app:',
-      [
-        {
-          text: 'Google Maps',
-          onPress: () => {
-            const url = Platform.OS === 'ios'
-              ? `comgooglemaps://?daddr=${latitude},${longitude}&directionsmode=driving`
-              : `google.navigation:q=${latitude},${longitude}&mode=d`;
-            
-            Linking.canOpenURL(url).then((supported) => {
-              if (supported) {
-                Linking.openURL(url);
-              } else {
-                // Fallback to web
-                Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&travelmode=driving`);
-              }
-            });
-          }
-        },
-        ...(Platform.OS === 'ios' ? [{
-          text: 'Apple Maps',
-          onPress: () => {
-            Linking.openURL(`http://maps.apple.com/?daddr=${latitude},${longitude}&dirflg=d`);
-          }
-        }] : []),
-        {
-          text: 'Waze',
-          onPress: () => {
-            const wazeUrl = `waze://?ll=${latitude},${longitude}&navigate=yes`;
-            Linking.canOpenURL(wazeUrl).then((supported) => {
-              if (supported) {
-                Linking.openURL(wazeUrl);
-              } else {
-                Alert.alert('Waze Not Installed', 'Waze app is not installed on your device.');
-              }
-            });
-          }
-        },
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
-  }
+  // showNavigationOptions removed to enforce in-app navigation only
 
   /**
    * Clean HTML instructions from Google Directions API

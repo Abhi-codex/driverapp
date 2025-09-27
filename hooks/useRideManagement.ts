@@ -24,9 +24,6 @@ export const useRideManagement = (socketFunctions?: {
   // Get dependencies
   const { makeAuthenticatedRequest, handleApiError } = useAuthenticatedRequest();
 
-  /**
-   * Restore ride data from AsyncStorage
-   */
   const restoreRideData = useCallback(async () => {
     try {
       console.log('🔄 Restoring ride data from AsyncStorage...');
@@ -40,6 +37,16 @@ export const useRideManagement = (socketFunctions?: {
         console.log('✅ Restored accepted ride:', ride._id);
         setAcceptedRide(ride);
         
+        // If socket subscription is available, subscribe to ride updates for this restored ride
+        try {
+          if (socketFunctions?.subscribeToRide) {
+            console.log('\u2139\ufe0f Subscribing to restored accepted ride:', ride._id);
+            socketFunctions.subscribeToRide(ride._id);
+          }
+        } catch (err) {
+          console.error('Failed to subscribe to restored accepted ride:', err);
+        }
+
         if (ride.drop) {
           setDestination({
             latitude: ride.drop.latitude,
@@ -171,9 +178,6 @@ export const useRideManagement = (socketFunctions?: {
     }
   }, [makeAuthenticatedRequest, handleApiError, calculateDistance]);
 
-  /**
-   * Accept a ride request
-   */
   const handleAcceptRide = useCallback(async (
     rideId: string, 
     driverLocation?: { latitude: number; longitude: number },
@@ -222,9 +226,6 @@ export const useRideManagement = (socketFunctions?: {
     }
   }, [makeAuthenticatedRequest, handleApiError]);
 
-  /**
-   * Update ride status (START, ARRIVED, COMPLETED, etc.)
-   */
   const updateRideStatus = useCallback(async (rideId: string, status: RideStatus) => {
     console.log('🚀 updateRideStatus called with:', { rideId, status });
     try {
@@ -279,17 +280,11 @@ export const useRideManagement = (socketFunctions?: {
     }
   }, [makeAuthenticatedRequest, handleApiError]);
 
-  /**
-   * Reject a ride request (local only, no API call)
-   */
   const handleRejectRide = useCallback((rideId: string) => {
     setAvailableRides(prev => prev.filter(r => r._id !== rideId));
     // Optionally, you could call an API endpoint to notify backend about rejection
   }, []);
 
-  /**
-   * Check if a ride can be cancelled and get cancellation details
-   */
   const canCancelRide = useCallback(async (rideId: string) => {
     try {
       setLoading(true);
@@ -312,9 +307,6 @@ export const useRideManagement = (socketFunctions?: {
     }
   }, [makeAuthenticatedRequest, handleApiError]);
 
-  /**
-   * Cancel a ride with reason
-   */
   const cancelRide = useCallback(async (rideId: string, reason: string): Promise<void> => {
     try {
       setLoading(true);
@@ -348,9 +340,6 @@ export const useRideManagement = (socketFunctions?: {
     }
   }, [makeAuthenticatedRequest, handleApiError, acceptedRide, fetchAvailableRides]);
 
-  /**
-   * Handle ride cancellation from real-time updates
-   */
   const handleRideCancellation = useCallback(async (
     ride: Ride, 
     cancelledBy: string, 
@@ -394,35 +383,59 @@ export const useRideManagement = (socketFunctions?: {
       }
       
       console.log('🧹 Clearing ride state...');
+      // Defensive clear: ensure persisted keys are removed even if other flows miss them
+      try {
+        await AsyncStorage.removeItem('accepted_ride');
+        await AsyncStorage.removeItem('trip_started');
+        await AsyncStorage.removeItem('navigation_stage');
+        console.log('🧹 Defensive clear of persisted ride keys completed');
+      } catch (err) {
+        console.error('Failed defensive clear of persisted ride keys:', err);
+      }
+
       await clearRideState();
       
       // Enhanced alert with more details and actions
       const alertTitle = cancelledBy === 'patient' ? '🚫 Ride Cancelled by Patient' : '❌ Ride Cancelled';
-      const alertMessage = cancelledBy === 'patient' 
-        ? `The patient has cancelled this emergency ride.\n\nReason: ${message}\n\nYou can now accept other ride requests.`
-        : `Ride has been cancelled.\n\nReason: ${message}`;
       
-      console.log('🚨 Showing cancellation alert:', { alertTitle, alertMessage });
-      Alert.alert(
-        alertTitle, 
-        alertMessage, 
-        [
-          { 
-            text: 'View Available Rides', 
-            onPress: () => {
-              console.log('👤 User chose to view available rides');
-              fetchAvailableRides();
+      let alertMessage = '';
+      let shouldShowAlert = true;
+      
+      if (cancelledBy === 'patient' && ride.cancellation) {
+        // For patient cancellations, the detailed alert is already shown by the notification handler
+        // Just show a simple confirmation
+        shouldShowAlert = false;
+      } else if (cancelledBy === 'patient') {
+        alertMessage = `The patient has cancelled this emergency ride.\n\nReason: ${message}\n\nYou can now accept other ride requests.`;
+      } else {
+        alertMessage = `Ride has been cancelled.\n\nReason: ${message}`;
+      }
+      
+      if (shouldShowAlert) {
+        console.log('🚨 Showing cancellation alert:', { alertTitle, alertMessage });
+        Alert.alert(
+          alertTitle, 
+          alertMessage, 
+          [
+            { 
+              text: 'View Available Rides', 
+              onPress: () => {
+                console.log('👤 User chose to view available rides');
+                fetchAvailableRides();
+              }
+            },
+            { 
+              text: 'OK', 
+              style: 'default',
+              onPress: () => {
+                console.log('👤 User acknowledged cancellation');
+              }
             }
-          },
-          { 
-            text: 'OK', 
-            style: 'default',
-            onPress: () => {
-              console.log('👤 User acknowledged cancellation');
-            }
-          }
-        ]
-      );
+          ]
+        );
+      } else {
+        console.log('🚨 Skipping alert for patient cancellation - already shown by notification handler');
+      }
     } else {
       console.log('ℹ️ This is not the accepted ride - just removing from available rides list');
     }
@@ -433,9 +446,6 @@ export const useRideManagement = (socketFunctions?: {
     console.log('🚨 ========= RIDE CANCELLATION HANDLER COMPLETED =========');
   }, [acceptedRide, fetchAvailableRides]);
 
-  /**
-   * Clear all ride-related state
-   */
   const clearRideState = useCallback(async () => {
     console.log('🧹 Clearing ride state...');
     setAcceptedRide(null);
@@ -452,9 +462,6 @@ export const useRideManagement = (socketFunctions?: {
     }
   }, []);
 
-  /**
-   * Complete ride and clear state
-   */
   const completeRide = useCallback(async () => {
     console.log('🎯 completeRide() called - starting ride completion process');
     // Unsubscribe from ride updates before clearing state
@@ -481,9 +488,6 @@ export const useRideManagement = (socketFunctions?: {
     }, 500);
   }, [socketFunctions, clearRideState, fetchAvailableRides]);
 
-  /**
-   * Persist ride data to AsyncStorage
-   */
   const persistRide = useCallback(async (ride: Ride, tripStarted: boolean) => {
     try {
       await AsyncStorage.setItem('accepted_ride', JSON.stringify(ride));
@@ -493,10 +497,9 @@ export const useRideManagement = (socketFunctions?: {
     }
   }, []);
 
-  /**
-   * Update ride list with real-time changes
-   */
   const updateRideInList = useCallback((updatedRide: Ride) => {
+    console.log('🔄 updateRideInList called with ride:', updatedRide._id, 'status:', updatedRide.status);
+    
     setAvailableRides(prev => {
       const existingIndex = prev.findIndex(r => r._id === updatedRide._id);
       
@@ -513,9 +516,12 @@ export const useRideManagement = (socketFunctions?: {
 
     // If this is the accepted ride, update it
     if (acceptedRide && acceptedRide._id === updatedRide._id) {
+      console.log('🔄 Updating accepted ride from', acceptedRide.status, 'to', updatedRide.status);
       setAcceptedRide(updatedRide);
       // Persist the updated accepted ride
       persistRide(updatedRide, tripStarted);
+    } else {
+      console.log('🔄 Ride is not the accepted ride - acceptedRide:', acceptedRide?._id, 'updatedRide:', updatedRide._id);
     }
   }, [acceptedRide]);
 

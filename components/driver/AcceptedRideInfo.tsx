@@ -9,6 +9,7 @@ import { ScrollView } from "react-native-gesture-handler";
 interface AcceptedRideInfoProps {
   acceptedRide: Ride | null;
   driverLocation: { latitude: number; longitude: number } | null;
+  onNavigationStart?: (destination: { latitude: number; longitude: number }, stage: 'to_patient' | 'to_hospital') => void;
 }
 const getRelativeTime = (createdAt: string | Date): string => {
   const now = new Date();
@@ -60,6 +61,8 @@ const generateOtpStorageKey = (rideId: string): string => {
 
 function AcceptedRideInfo({
   acceptedRide,
+  driverLocation,
+  onNavigationStart,
 }: AcceptedRideInfoProps) {
   const [relativeTime, setRelativeTime] = useState("");
   const [otpInput, setOtpInput] = useState("");
@@ -165,19 +168,30 @@ function AcceptedRideInfo({
 
   const handleDirections = () => {
     if (!acceptedRide?.pickup) return;
-    
-    const { latitude, longitude } = acceptedRide.pickup;
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
-    
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (supported) {
-          return Linking.openURL(url);
+    const destination = acceptedRide.pickup;
+
+    if (typeof onNavigationStart === 'function') {
+      onNavigationStart(destination, 'to_patient');
+      return;
+    }
+
+    // Fallback: calculate route using NavigationService for in-app display
+    (async () => {
+      try {
+        const mod: any = (await import('../../utils/navigationService'))?.default || (await import('../../utils/navigationService'));
+        const navInstance: any = mod.getInstance ? mod.getInstance() : mod;
+        // If driver location available, calculate route
+        if (driverLocation) {
+          await navInstance.calculateRoute(driverLocation, destination);
+          Alert.alert('Navigation', 'In-app navigation route calculated.');
         } else {
-          Alert.alert("Error", "Maps navigation is not supported on this device");
+          Alert.alert('Navigation Error', 'Driver location is required to start navigation');
         }
-      })
-      .catch((err) => console.error('Error opening maps:', err));
+      } catch (err) {
+        console.error('Failed to start in-app navigation:', err);
+        Alert.alert('Navigation Error', 'Failed to start in-app navigation');
+      }
+    })();
   };
 
   if (!acceptedRide) {
@@ -204,7 +218,7 @@ function AcceptedRideInfo({
     <ScrollView style={[styles.mb4]}>
       {/* Clean Header */}
       <View style={[styles.mb4, styles.p4, styles.roundedLg, { backgroundColor: colors.gray[50] }]}> 
-        <View style={[styles.flexCol, styles.alignCenter, styles.justifyBetween, styles.mb3]}>
+        <View style={[styles.flexCol, styles.gap2, styles.alignCenter, styles.justifyBetween, styles.mb3]}>
           <View style={[styles.flexRow, styles.alignCenter]}>
             <View style={[styles.w10, styles.h10, styles.roundedFull, styles.alignCenter, styles.justifyCenter, { backgroundColor: colors.emergency[100] }]}>
               <MaterialCommunityIcons name={statusInfo.icon as any} size={20} color={statusInfo.color} />
@@ -220,29 +234,6 @@ function AcceptedRideInfo({
           </View>
         </View>
 
-        <Text style={[styles.textSm, styles.textGray600, styles.mb2]}>
-          Request ID: #{acceptedRide._id.slice(-6).toUpperCase()}
-        </Text>
-
-        {/* Emergency and Hospital Info */}
-        {acceptedRide.emergency?.name && (
-          <View style={[styles.flexRow, styles.alignCenter, styles.mb1]}>
-            <MaterialCommunityIcons name="alert" size={14} color={colors.emergency[600]} style={[styles.mr2]} />
-            <Text style={[styles.textSm, styles.fontMedium, styles.textGray800]}>
-              {acceptedRide.emergency.name}
-            </Text>
-          </View>
-        )}
-
-        {acceptedRide.hospitalDetails?.name && (
-          <View style={[styles.flexRow, styles.alignCenter, styles.mb3]}>
-            <MaterialCommunityIcons name="hospital-building" size={14} color={colors.medical[600]} style={[styles.mr2]} />
-            <Text style={[styles.textSm, styles.fontMedium, styles.textGray800]}>
-              {acceptedRide.hospitalDetails.name}
-            </Text>
-          </View>
-        )}
-
         {/* Time and Fare Info */}
         <View style={[styles.flexRow, styles.justifyBetween]}>
           <View style={[styles.flexRow, styles.alignCenter]}>
@@ -253,9 +244,8 @@ function AcceptedRideInfo({
           </View>
           
           <View style={[styles.flexRow, styles.alignCenter]}>
-            <MaterialIcons name="attach-money" size={12} color={colors.gray[500]} style={[styles.mr1]} />
             <Text style={[styles.textXs, styles.textGray600]}>
-              ₹{formatFare(acceptedRide.fare)}
+              ₹ {formatFare(acceptedRide.fare)}
             </Text>
           </View>
         </View>
@@ -336,9 +326,6 @@ function AcceptedRideInfo({
                 </TouchableOpacity>
               </View>
             </View>
-            <Text style={[styles.textXs, styles.textGray600, styles.textCenter]}>
-              Patient OTP: {acceptedRide.otp} (for testing)
-            </Text>
           </View>
         )}
       </View>

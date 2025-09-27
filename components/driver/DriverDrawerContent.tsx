@@ -9,7 +9,7 @@ import AvailableRidesList from "./AvailableRidesList";
 import NoRidesAvailable from "./NoRidesAvailable";
 import DriverControlPanel from "./DriverControlPanel";
 import DriverQuickStats from "./DriverQuickStats";
-import NavigationModeToggle from "./NavigationModeToggle";
+// Navigation mode toggle removed - in-app navigation only
 
 interface DriverDrawerContentProps {
   currentSnapPoint: "MINIMIZED" | "PARTIAL" | "FULL";
@@ -63,7 +63,6 @@ export default function DriverDrawerContent({
   isNavigating = false,
   navigationStage = 'idle',
   currentRoute = null,
-  navigationMode = 'external',
   onNavigationStart,
   onNavigationStop,
   onStageComplete,
@@ -493,13 +492,7 @@ export default function DriverDrawerContent({
                 <View style={[styles.flexRow, styles.alignCenter, styles.justifyBetween, styles.mb3]}>
                 </View>
 
-                {/* Navigation Mode Toggle */}
-                {onToggleNavigationMode && (
-                  <NavigationModeToggle
-                    navigationMode={navigationMode}
-                    onToggle={onToggleNavigationMode}
-                  />
-                )}
+                {/* Navigation Mode Toggle removed - in-app navigation only */}
 
                 <TouchableOpacity
                   onPress={() => {

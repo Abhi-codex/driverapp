@@ -34,7 +34,7 @@ export default {
         NSLocationAlwaysUsageDescription: "This app needs background location access to notify you of nearby emergency requests even when the app is closed.",
         UIBackgroundModes: ["location", "background-fetch", "remote-notification"],
         ITSAppUsesNonExemptEncryption: false
-      }
+      },
     },
     android: {
       package: "com.instaaid.driver",
@@ -62,7 +62,8 @@ export default {
       adaptiveIcon: {
         foregroundImage: "./assets/images/logo.png",
         backgroundColor: "#ffffff"
-      }
+      },
+  googleServicesFile: './google-services.json',
     },
     web: {
       bundler: "metro",
@@ -78,8 +79,7 @@ export default {
         {
           icon: "./assets/images/logo.png",
           color: "#0066CC",
-          sounds: ["./assets/sounds/notification.wav"],
-          mode: "development"
+          sounds: ["./assets/sounds/notification.wav"]
         }
       ],
       [

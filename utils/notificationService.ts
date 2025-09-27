@@ -6,8 +6,6 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Location from 'expo-location';
 
-// Note: This service uses ONLY Expo's push notification service
-// No Firebase/FCM is required or used
 const PUSH_TOKEN_KEY = 'pushToken';
 const BACKGROUND_NOTIFICATION_TASK = 'background-notification-task';
 
