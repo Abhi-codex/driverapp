@@ -104,10 +104,15 @@ class NotificationService {
       }
 
       // Request background location permission for proximity detection
-      const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
-      if (backgroundStatus !== 'granted') {
-        console.warn('🔔 Background location permission not granted');
-      }
+        try {
+          const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+          if (backgroundStatus !== 'granted') {
+            console.warn('🔔 Background location permission not granted');
+          }
+        } catch (err) {
+          // Some platforms or minimal builds may not support requesting background permissions
+          console.warn('🔔 Error requesting background location permission (continuing):', err);
+        }
 
       return true;
     } catch (error) {
@@ -188,29 +193,41 @@ class NotificationService {
    */
   async setupBackgroundTasks(): Promise<void> {
     try {
-      // Define background task
-      TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error }) => {
-        if (error) {
-          console.error('🔔 Background task error:', error);
-          return;
+      // Define background task only if not already registered
+      try {
+        const alreadyRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_NOTIFICATION_TASK);
+        if (!alreadyRegistered) {
+          TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error }) => {
+            if (error) {
+              console.error('🔔 Background task error:', error);
+              return;
+            }
+
+            console.log('🔔 Background notification task executed');
+            // This will be handled by the backend push notifications
+            // The task mainly keeps the app eligible for background processing
+          });
         }
 
-        console.log('🔔 Background notification task executed');
-        // This will be handled by the backend push notifications
-        // The task mainly keeps the app eligible for background processing
-      });
-
-      // Check if background fetch is available and register
-      const isAvailable = await BackgroundFetch.getStatusAsync();
-      if (isAvailable === BackgroundFetch.BackgroundFetchStatus.Available) {
-        await BackgroundFetch.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK, {
-          minimumInterval: 60000, // 1 minute minimum
-          stopOnTerminate: false,
-          startOnBoot: true,
-        });
-        console.log('🔔 Background tasks registered successfully');
-      } else {
-        console.log('🔔 Background fetch not available, skipping background task registration');
+        // Check if background fetch is available and register
+        const isAvailable = await BackgroundFetch.getStatusAsync();
+        if (isAvailable === BackgroundFetch.BackgroundFetchStatus.Available) {
+          const registered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_NOTIFICATION_TASK);
+          if (!registered) {
+            await BackgroundFetch.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK, {
+              minimumInterval: 60000, // 1 minute minimum
+              stopOnTerminate: false,
+              startOnBoot: true,
+            });
+            console.log('🔔 Background tasks registered successfully');
+          } else {
+            console.log('🔔 Background task already registered');
+          }
+        } else {
+          console.log('🔔 Background fetch not available, skipping background task registration');
+        }
+      } catch (err) {
+        console.warn('🔔 Background task setup encountered an error (continuing without background tasks):', err);
       }
     } catch (error) {
       console.warn('🔔 Background task setup failed (continuing without background tasks):', error);

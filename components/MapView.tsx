@@ -85,6 +85,7 @@ interface MarkerProps {
   onPress?: () => void;
   onCalloutPress?: () => void;
   type?: 'driver' | 'patient' | 'hospital';
+  rotation?: number;
   children?: React.ReactNode;
 }
 
@@ -542,8 +543,10 @@ export const MarkerWrapper: React.FC<MarkerProps> = (props) => {
       anchor: { x: 0.5, y: 0.5 },
       centerOffset: { x: 0, y: -20 },
       zIndex: 1000,
-      rotation: 0,
-      flat: false,
+      // Allow rotation to be passed through (heading), and make marker flat
+      // so the image rotates on the map like a vehicle icon.
+      rotation: (props as any).rotation || 0,
+      flat: true,
     };
   } else if (props.type === 'patient') {
     markerConfig = {

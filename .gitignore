@@ -17,5 +17,4 @@ eas.json
 app.json
 .DS_Store
 google-services.json
-app.config.js
 expo-env.d.ts

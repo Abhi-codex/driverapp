@@ -40,8 +40,6 @@ export default {
       package: "com.instaaid.driver",
       edgeToEdgeEnabled: true,
       permissions: [
-        "android.permission.RECEIVE_SMS",
-        "android.permission.READ_SMS",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_BACKGROUND_LOCATION",
@@ -63,7 +61,6 @@ export default {
         foregroundImage: "./assets/images/logo.png",
         backgroundColor: "#ffffff"
       },
-  googleServicesFile: './google-services.json',
     },
     web: {
       bundler: "metro",

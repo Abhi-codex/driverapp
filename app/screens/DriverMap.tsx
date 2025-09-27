@@ -23,6 +23,7 @@ export default function DriverMapScreen() {
   const [driverLocation, setDriverLocation] = useState<any>(null);
   const [currentSnapPoint, setCurrentSnapPoint] = useState<"MINIMIZED" | "PARTIAL" | "FULL">("MINIMIZED");
   const [locationSubscription, setLocationSubscription] = useState<any>(null);
+  const locationSubRef = React.useRef<any>(null);
   
   const translateY = useSharedValue(SNAP_POINTS.MINIMIZED);
 
@@ -257,26 +258,44 @@ export default function DriverMapScreen() {
           distanceInterval: 5, // Update when moved 5 meters for fine-grained tracking
         },
         (location) => {
-          // Use higher precision coordinates (8 decimal places ≈ 1.1 meter accuracy)
-          const updatedRegion = {
-            latitude: Number(location.coords.latitude.toFixed(8)),
-            longitude: Number(location.coords.longitude.toFixed(8)),
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          };
-          
-          console.log('📍 Location update:', {
-            lat: updatedRegion.latitude.toFixed(6), // Reduced precision for cleaner logs
-            lng: updatedRegion.longitude.toFixed(6),
-            accuracy: Math.round(location.coords.accuracy),
-          });
-          
-          setDriverLocation(updatedRegion);
-          updateDriverLocation(updatedRegion); // Update the hook's location
+          try {
+            // Validate location payload
+            if (!location || !location.coords) {
+              console.warn('Received malformed location update:', location);
+              return;
+            }
+
+            const lat = location.coords.latitude;
+            const lng = location.coords.longitude;
+            if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {
+              console.warn('Received invalid coordinates in location update:', location.coords);
+              return;
+            }
+
+            // Use higher precision coordinates (8 decimal places ≈ 1.1 meter accuracy)
+            const updatedRegion = {
+              latitude: Number(lat.toFixed(8)),
+              longitude: Number(lng.toFixed(8)),
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            };
+
+            console.log('📍 Location update:', {
+              lat: updatedRegion.latitude.toFixed(6), // Reduced precision for cleaner logs
+              lng: updatedRegion.longitude.toFixed(6),
+              accuracy: location.coords.accuracy ? Math.round(location.coords.accuracy) : 'unknown',
+            });
+
+            setDriverLocation(updatedRegion);
+            updateDriverLocation(updatedRegion); // Update the hook's location
+          } catch (err) {
+            console.warn('Error processing location update (ignored):', err);
+          }
         }
       );
 
       setLocationSubscription(subscription);
+      locationSubRef.current = subscription;
       console.log('Location tracking initialized successfully');
     } 
     catch (error) {
@@ -298,14 +317,23 @@ export default function DriverMapScreen() {
     
     // Cleanup location subscription on unmount
     return () => {
-      if (locationSubscription) {
+      // Clean up subscription from ref (safer than relying on state closure)
+      const sub = locationSubRef.current || locationSubscription;
+      if (sub) {
         try {
-          locationSubscription.remove();
+          if (typeof sub.remove === 'function') {
+            sub.remove();
+          } else if (typeof sub.unsubscribe === 'function') {
+            sub.unsubscribe();
+          } else {
+            console.warn('Location subscription has no remove/unsubscribe method:', sub);
+          }
         } catch (err) {
           console.warn('Failed to remove location subscription', err);
         }
         console.log('🧭 Location subscription cleaned up');
       }
+      locationSubRef.current = null;
     };
   }, [initializeLocationTracking]);
 
