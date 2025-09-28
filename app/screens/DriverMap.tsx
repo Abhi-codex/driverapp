@@ -29,7 +29,6 @@ export default function DriverMapScreen() {
 
   const {
     online,
-    isInitialized,
     availableRides,
     acceptedRide,
     tripStarted,
@@ -41,7 +40,6 @@ export default function DriverMapScreen() {
     toggleOnline,
     updateRideStatus,
     updateDriverLocation,
-    driverStats,
     
     // Navigation functions
     startNavigation,
@@ -50,7 +48,6 @@ export default function DriverMapScreen() {
     isNavigating,
     navigationStage,
     currentRoute,
-    navigationMode,
     toggleNavigationMode,
     cancelRide,
     canCancelRide
